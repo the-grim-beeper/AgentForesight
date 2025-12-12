@@ -17,11 +17,10 @@ client = OpenAI(
     base_url="https://api.deepinfra.com/v1/openai",
 )
 
-# Kimi K2 Thinking is excellent for the heavy lifting of scenario generation
-AGENT_MODEL = "moonshotai/Kimi-K2-Thinking"
-
-# DeepSeek V3 remains the Moderator (Cost-effective & High Logic)
-MODERATOR_MODEL = "deepseek-ai/DeepSeek-V3"
+# Default Fallbacks
+DEFAULT_AGENT_MODEL = "deepseek-ai/DeepSeek-V3"
+DEFAULT_MODERATOR_MODEL = "deepseek-ai/DeepSeek-V3"
+CLEANER_MODEL = "meta-llama/Llama-3.3-70B-Instruct"
 
 ROLES = [
     "Economist", "Sociologist", "Technologist",
@@ -29,165 +28,134 @@ ROLES = [
 ]
 
 
-def clean_json_response(raw_content):
-    if not raw_content: return ""
+def clean_with_llm(raw_text, error_msg=""):
+    try:
+        response = client.chat.completions.create(
+            model=CLEANER_MODEL,
+            messages=[
+                {"role": "system", "content": "Extract valid JSON only. Fix syntax errors."},
+                {"role": "user", "content": f"Fix and extract JSON:\n\n{raw_text}"}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.0
+        )
+        return response.choices[0].message.content
+    except Exception:
+        return None
 
-    # 1. Attempt to find the first '{' and the last '}'
-    # This ignores any "Thinking Process" text that comes before the JSON
-    start_index = raw_content.find('{')
-    end_index = raw_content.rfind('}')
 
-    if start_index != -1 and end_index != -1 and end_index > start_index:
-        json_str = raw_content[start_index: end_index + 1]
-    else:
-        # Fallback: just return the raw string (it might be pure JSON)
-        json_str = raw_content
+def extract_json(raw_content):
+    if not raw_content: return None
+    try:
+        start = raw_content.find('{')
+        end = raw_content.rfind('}')
+        if start != -1 and end != -1:
+            return json.loads(raw_content[start: end + 1])
+    except:
+        pass
 
-    # 2. Remove any leftover Markdown formatting from the extracted string
-    cleaned = re.sub(r"```json", "", json_str, flags=re.IGNORECASE)
-    cleaned = re.sub(r"```", "", cleaned)
-
-    return cleaned.strip()
+    cleaned_text = clean_with_llm(raw_content)
+    try:
+        return json.loads(cleaned_text)
+    except:
+        return None
 
 
 class Agent:
-    def __init__(self, role):
+    def __init__(self, role, model_id):
         self.role = role
+        self.model_id = model_id
 
     def generate_pestle_and_scenarios(self, focal_question):
-        # Kimi K2 performs best when you explicitly tell it to use its reasoning capabilities
-        system_prompt = f"You are an expert {self.role}. You are a 'Thinking Model' that reasons deeply before answering. Use your internal chain-of-thought to derive unique insights, but ensure your Final Output is strictly valid JSON."
-
+        system_prompt = f"You are an expert {self.role}. Reasoning allowed, but end with valid JSON."
         user_prompt = f"""
         Focal Question: "{focal_question}"
 
-        TASK 1: PESTLE ANALYSIS
-        List 5 driving forces per PESTLE factor.
+        TASKS:
+        1. List 5 driving forces per PESTLE factor.
+        2. Select 3 critical forces.
+        3. Create 8 Scenarios (Title, State of Forces, Description, Signposts, Black Swan).
 
-        TASK 2: SELECTION
-        Select the 3 most critical driving forces (Variables) for this question.
-
-        TASK 3: SCENARIO GENERATION (Create 8 Scenarios)
-        For EACH scenario, you must define the specific STATE of your 3 forces.
-
-        Example of States:
-        Force: "Global Trade" -> State: "Fragmented" OR "Unified"
-        Force: "AI Regulation" -> State: "Banned" OR "Laissez-faire"
-
-        Output strictly JSON:
+        Output strictly JSON structure:
         {{
-            "pestle": {{ "Political": [], ... }},
-            "selected_forces": ["Force A", "Force B", "Force C"],
+            "pestle": {{ ... }},
+            "selected_forces": [...],
             "scenarios": [
                 {{
-                    "title": "Title", 
-                    "force_states": {{ "Force A": "State X", "Force B": "State Y", "Force C": "State Z" }},
-                    "description": "Detailed narrative...",
-                    "signposts": ["Early Indicator 1", "Early Indicator 2"],
-                    "black_swan": "Low probability high impact event"
+                    "title": "...", 
+                    "force_states": {{ "Force A": "State X", ... }},
+                    "description": "...",
+                    "signposts": [...],
+                    "black_swan": "..."
                 }}
             ]
         }}
         """
         try:
             response = client.chat.completions.create(
-                model=AGENT_MODEL,
+                model=self.model_id,
                 messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
-                # We don't enforce json_object mode strictly for Kimi as it sometimes interferes with its "Thinking" block
-                # Instead, we rely on the clean_json_response function
                 temperature=0.7
             )
-            return json.loads(clean_json_response(response.choices[0].message.content))
+            return extract_json(response.choices[0].message.content)
         except Exception as e:
             print(f"❌ {self.role} Error: {e}")
             return None
 
 
 class Moderator:
+    def __init__(self, model_id):
+        self.model_id = model_id
+
     def debate_and_select(self, focal_question, agent_outputs):
-        # 1. Prepare Master List
         master_scenarios = {}
         scenarios_text_list = []
 
         for role, data in agent_outputs.items():
             if data and 'scenarios' in data:
                 for s in data['scenarios']:
-                    # Unique ID: "Economist: The Great Stagnation"
                     s_id = f"{role}: {s['title']}"
                     master_scenarios[s_id] = s
-
-                    # Format for the prompt
                     states_str = " | ".join([f"{k}: {v}" for k, v in s.get('force_states', {}).items()])
-                    entry = f"ID: {s_id}\n   Forces: [{states_str}]\n   Desc: {s['description'][:250]}..."
-                    scenarios_text_list.append(entry)
+                    scenarios_text_list.append(
+                        f"ID: {s_id}\n   Forces: [{states_str}]\n   Desc: {s['description'][:250]}...")
 
-        # Shuffle to prevent bias towards the first agent in the list
         random.shuffle(scenarios_text_list)
         scenarios_block = "\n\n".join(scenarios_text_list)
 
-        # 2. Debate Loop
         conversation = [
-            {"role": "system", "content": f"""
-            You are a Foresight Moderator. 
-            Constraint 1: You must select scenarios from at least 3 DIFFERENT ROLES (e.g. 1 Economist, 1 Technologist, 1 Ecologist). 
-            Constraint 2: Do not let one role dominate.
-            Constraint 3: Ensure maximum structural divergence in the 'Forces'.
-            """},
-            {"role": "user", "content": f"""
-            Focal Question: "{focal_question}"
-
-            CANDIDATE SCENARIOS (shuffled):
-            {scenarios_block}
-
-            ROUND 1: INITIAL SELECTION
-            Select 4 scenarios that are divergent and plausible.
-            Output JSON: {{
-                "rationale": "Reasoning...",
-                "selected_ids": ["Role: Title 1", "Role: Title 2", "Role: Title 3", "Role: Title 4"]
-            }}
-            """}
+            {"role": "system", "content": "You are a Moderator. Select 4 diverse scenarios from at least 3 roles."},
+            {"role": "user",
+             "content": f"Question: {focal_question}\nCandidates:\n{scenarios_block}\n\nROUND 1: Select 4. Output JSON: {{ 'rationale': '...', 'selected_ids': [...] }}"}
         ]
 
         debate_log = []
         final_selection_ids = []
 
-        for round_num in range(1, 6):  # 5 Rounds
+        # 3 Rounds for speed
+        for round_num in range(1, 4):
             try:
-                print(f"Moderator Round {round_num}...")
                 response = client.chat.completions.create(
-                    model=MODERATOR_MODEL,
+                    model=self.model_id,
                     messages=conversation,
                     response_format={"type": "json_object"},
                     temperature=0.7
                 )
+                content = extract_json(response.choices[0].message.content)
+                if not content: break
 
-                content = json.loads(clean_json_response(response.choices[0].message.content))
                 current_ids = content.get("selected_ids", [])
-                rationale = content.get("rationale", "No rationale")
-
-                debate_log.append(f"Round {round_num}: {rationale}")
+                debate_log.append(f"Round {round_num}: {content.get('rationale', 'No rationale')}")
                 final_selection_ids = current_ids
 
                 conversation.append(response.choices[0].message)
+                if round_num < 3:
+                    conversation.append({"role": "user",
+                                         "content": f"ROUND {round_num + 1}: Critique {current_ids}. Ensure diversity. Swap if needed."})
 
-                if round_num < 5:
-                    critique_prompt = f"""
-                    ROUND {round_num + 1}: CRITIQUE & DIVERSIFY
-                    Current Selection: {current_ids}
-
-                    CHECK: Are there at least 3 different roles represented?
-                    CHECK: Do the 'Forces' states conflict nicely (e.g. one has High Regulation, one has Low)?
-
-                    ACTION: Swap at least 1 scenario to improve Role Diversity or Structural Divergence.
-                    Output JSON with "rationale" and "selected_ids".
-                    """
-                    conversation.append({"role": "user", "content": critique_prompt})
-
-            except Exception as e:
-                print(f"Debate Error: {e}")
+            except Exception:
                 break
 
-        # 3. Retrieve FULL details
         final_scenarios_full = []
         for s_id in final_selection_ids:
             if s_id in master_scenarios:
@@ -195,33 +163,33 @@ class Moderator:
                 full_obj['id_key'] = s_id
                 final_scenarios_full.append(full_obj)
 
-        return {
-            "debate_log": debate_log,
-            "final_scenarios": final_scenarios_full,
-        }
+        return {"debate_log": debate_log, "final_scenarios": final_scenarios_full}
 
 
-def run_foresight_simulation(focal_question):
+def run_foresight_simulation(focal_question, model_map=None):
+    if model_map is None: model_map = {}
+
     print(f"🚀 Starting: {focal_question}")
     agent_results = {}
 
+    # Use max_workers=6 for paid tier, 3 for free tier
     with ThreadPoolExecutor(max_workers=6) as executor:
-        future_to_role = {executor.submit(Agent(role).generate_pestle_and_scenarios, focal_question): role for role in
-                          ROLES}
+        future_to_role = {}
+        for role in ROLES:
+            # Pick model for this specific role, or default
+            m_id = model_map.get(role, DEFAULT_AGENT_MODEL)
+            future_to_role[executor.submit(Agent(role, m_id).generate_pestle_and_scenarios, focal_question)] = role
+
         for future in as_completed(future_to_role):
             role = future_to_role[future]
             try:
                 res = future.result()
                 if res: agent_results[role] = res
-                print(f"✅ {role} Done")
             except:
-                print(f"❌ {role} Failed")
+                pass
 
-    if not agent_results:
-        return {"error": "All agents failed."}
-
-    print("🧠 Moderator debating...")
-    moderator_report = Moderator().debate_and_select(focal_question, agent_results)
-    print("🏁 Finished")
+    # Run Moderator
+    mod_model = model_map.get("Moderator", DEFAULT_MODERATOR_MODEL)
+    moderator_report = Moderator(mod_model).debate_and_select(focal_question, agent_results)
 
     return {"agent_data": agent_results, "moderator_report": moderator_report}

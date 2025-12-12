@@ -6,8 +6,10 @@ from agents import run_foresight_simulation
 app = Flask(__name__)
 
 # --- PASSWORD PROTECTION CONFIGURATION ---
+# Default username is 'team'.
+# Password comes from environment variable 'APP_PASSWORD' (set this in Render),
+# or defaults to 'default_secret' for local testing.
 USERNAME = "team"
-# We will set the real password in the online dashboard later
 PASSWORD = os.environ.get("APP_PASSWORD", "default_secret")
 
 
@@ -38,29 +40,32 @@ def requires_auth(f):
 # -----------------------------------------
 
 @app.route('/')
-@requires_auth  # <--- This locks the page
+@requires_auth  # <--- Locks the dashboard behind a password
 def index():
     return render_template('index.html')
 
 
 @app.route('/run', methods=['POST'])
-@requires_auth  # <--- This locks the API
+@requires_auth  # <--- Locks the API behind a password
 def run():
     data = request.json
     focal_question = data.get('question')
+
+    # Extract the dynamic model selection from the frontend
+    model_config = data.get('model_config', {})
 
     if not focal_question:
         return jsonify({"error": "No question provided"}), 400
 
     try:
-        # Run the heavy lifting
-        result = run_foresight_simulation(focal_question)
+        # Run the simulation with the user's specific model choices
+        result = run_foresight_simulation(focal_question, model_config)
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 if __name__ == '__main__':
-    # Use the port Render assigns, or default to 5000
+    # Use the port Render assigns, or default to 5000 for local dev
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)

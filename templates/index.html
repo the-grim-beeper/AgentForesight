@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Foresight Engine</title>
+    <title>Deep Future Engine</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #0b1121; color: #e2e8f0; font-family: 'Inter', sans-serif; }
@@ -11,12 +11,7 @@
         @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .scroller::-webkit-scrollbar { width: 6px; }
         .scroller::-webkit-scrollbar-thumb { background-color: #334155; border-radius: 4px; }
-
-        /* Custom Table Styles for Forces */
         .force-table td { padding: 4px 8px; font-size: 0.8rem; border-bottom: 1px solid #1e293b; }
-        .force-table tr:last-child td { border-bottom: none; }
-        .force-key { color: #94a3b8; font-weight: 600; }
-        .force-val { color: #38bdf8; text-align: right; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col items-center py-8 px-4">
@@ -28,58 +23,102 @@
         <p class="text-slate-500 text-sm mt-1">Multi-Agent Scenario Architectures</p>
     </header>
 
-    <div class="w-full max-w-3xl bg-slate-900 p-1 rounded-xl shadow-lg border border-slate-800 flex mb-8">
-        <input type="text" id="question"
-               class="flex-1 bg-transparent px-5 py-3 focus:outline-none text-white placeholder-slate-600"
-               placeholder="Enter focal question (e.g. Future of Democracy 2050)...">
-        <button onclick="runSimulation()"
-                class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-6 py-2 rounded-r-lg transition-colors flex items-center">
-            <span id="btn-text">Simulate</span>
-            <div id="loading" class="spinner rounded-full border-2 border-white/30 h-4 w-4 ml-2 hidden"></div>
-        </button>
+    <div class="w-full max-w-4xl space-y-4 mb-8">
+
+        <div class="bg-slate-900 p-1 rounded-xl shadow-lg border border-slate-800 flex">
+            <input type="text" id="question"
+                   class="flex-1 bg-transparent px-5 py-3 focus:outline-none text-white placeholder-slate-600"
+                   placeholder="Enter focal question (e.g. Future of Democracy 2050)...">
+            <button onclick="runSimulation()"
+                    class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-6 py-2 rounded-r-lg transition-colors flex items-center">
+                <span id="btn-text">Simulate</span>
+                <div id="loading" class="spinner rounded-full border-2 border-white/30 h-4 w-4 ml-2 hidden"></div>
+            </button>
+        </div>
+
+        <div class="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+            <button onclick="document.getElementById('model-settings').classList.toggle('hidden')"
+                    class="w-full px-5 py-3 text-left text-xs font-bold text-slate-400 hover:text-white uppercase tracking-wider flex justify-between items-center bg-slate-900/50">
+                <span>⚙️ Model Configuration (Click to Expand)</span>
+                <span>▼</span>
+            </button>
+
+            <div id="model-settings" class="hidden p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-black/20">
+                </div>
+        </div>
     </div>
 
     <div id="results-area" class="w-full max-w-7xl hidden">
-
-        <div class="bg-slate-900 border border-indigo-500/30 rounded-2xl p-6 mb-10 shadow-2xl shadow-indigo-900/10">
+        <div class="bg-slate-900 border border-indigo-500/30 rounded-2xl p-6 mb-10 shadow-2xl">
             <div class="flex justify-between items-end mb-6 border-b border-slate-800 pb-4">
                 <div>
-                    <h2 class="text-2xl font-bold text-indigo-400">Moderator's Selected Futures</h2>
-                    <p class="text-slate-500 text-sm">Selected for maximum structural divergence</p>
+                    <h2 class="text-2xl font-bold text-indigo-400">Moderator's Selection</h2>
                 </div>
-                <button onclick="toggleLog()" class="text-xs text-slate-500 hover:text-indigo-300 underline">View Debate Log</button>
+                <button onclick="document.getElementById('debate-log').classList.toggle('hidden')" class="text-xs text-slate-500 underline">View Log</button>
             </div>
-
             <div id="debate-log" class="hidden bg-black/30 p-4 rounded text-xs font-mono text-slate-400 mb-6 border border-slate-800"></div>
-
-            <div id="top-scenarios" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6">
-                </div>
+            <div id="top-scenarios" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
         </div>
 
         <h2 class="text-lg font-bold text-slate-400 mb-4 pl-2">Full Agent Outputs</h2>
-        <div id="agent-grid" class="grid grid-cols-1 md:grid-cols-3 gap-5">
-            </div>
+        <div id="agent-grid" class="grid grid-cols-1 md:grid-cols-3 gap-5"></div>
     </div>
 
-    <div id="modal" class="fixed inset-0 bg-black/90 hidden flex items-center justify-center z-50 p-4 backdrop-blur-sm" onclick="closeModal()">
-        <div class="bg-slate-900 w-full max-w-5xl max-h-[90vh] rounded-2xl border border-slate-700 flex flex-col shadow-2xl" onclick="event.stopPropagation()">
-            <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900 rounded-t-2xl">
+    <div id="modal" class="fixed inset-0 bg-black/90 hidden flex items-center justify-center z-50 p-4 backdrop-blur-sm" onclick="document.getElementById('modal').classList.add('hidden')">
+        <div class="bg-slate-900 w-full max-w-5xl max-h-[90vh] rounded-2xl border border-slate-700 flex flex-col" onclick="event.stopPropagation()">
+            <div class="p-6 border-b border-slate-800 flex justify-between items-center">
                 <h3 id="modal-title" class="text-xl font-bold text-white"></h3>
-                <button onclick="closeModal()" class="text-slate-400 hover:text-white text-3xl">&times;</button>
+                <button onclick="document.getElementById('modal').classList.add('hidden')" class="text-slate-400 text-3xl">&times;</button>
             </div>
-            <div id="modal-content" class="p-8 overflow-y-auto scroller grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-950">
-                </div>
+            <div id="modal-content" class="p-8 overflow-y-auto scroller grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-950"></div>
         </div>
     </div>
 
     <script>
+        // CONFIGURATION
+        const ROLES = ["Moderator", "Economist", "Sociologist", "Technologist", "Ecologist", "Political Scientist", "Legal Ethicist"];
+
+        const MODELS = [
+            {name: "DeepSeek V3 (Fast & Smart)", id: "deepseek-ai/DeepSeek-V3"},
+            {name: "Llama 3.3 70B (Reliable)", id: "meta-llama/Llama-3.3-70B-Instruct"},
+            {name: "Kimi K2 Thinking (Deep Logic)", id: "moonshotai/Kimi-K2-Thinking"},
+            {name: "Qwen 2.5 72B (Versatile)", id: "Qwen/Qwen2.5-72B-Instruct"},
+            {name: "Mixtral 8x22B (Creative)", id: "mistralai/Mixtral-8x22B-Instruct-v0.1"}
+        ];
+
+        // Initialize Settings
+        const settingsDiv = document.getElementById('model-settings');
+        ROLES.forEach(role => {
+            const isMod = role === "Moderator";
+            const defaultModel = isMod ? "deepseek-ai/DeepSeek-V3" : "deepseek-ai/DeepSeek-V3"; // Default everything to DeepSeek for speed
+
+            let options = MODELS.map(m =>
+                `<option value="${m.id}" ${m.id === defaultModel ? 'selected' : ''}>${m.name}</option>`
+            ).join('');
+
+            settingsDiv.innerHTML += `
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">${role}</label>
+                    <select id="model-${role}" class="w-full bg-slate-800 text-xs text-slate-300 border border-slate-700 rounded px-2 py-2 focus:border-indigo-500 outline-none">
+                        ${options}
+                    </select>
+                </div>
+            `;
+        });
+
         let currentData = null;
 
         async function runSimulation() {
             const q = document.getElementById('question').value;
             if(!q) return alert("Enter a question");
 
-            document.getElementById('btn-text').innerText = "Simulating...";
+            // Gather Model Config
+            const modelConfig = {};
+            ROLES.forEach(role => {
+                modelConfig[role] = document.getElementById(`model-${role}`).value;
+            });
+
+            document.getElementById('btn-text').innerText = "Running...";
             document.getElementById('loading').classList.remove('hidden');
             document.getElementById('results-area').classList.add('hidden');
 
@@ -87,7 +126,7 @@
                 const res = await fetch('/run', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ question: q })
+                    body: JSON.stringify({ question: q, model_config: modelConfig })
                 });
                 const data = await res.json();
                 currentData = data;
@@ -101,56 +140,38 @@
         }
 
         function renderScenarioCard(s, isTop = false) {
-            // Helper to render the Force States table
-            let statesHtml = '<table class="w-full force-table mb-3">';
+            let statesHtml = '';
             if(s.force_states) {
+                statesHtml = '<div class="bg-black/40 rounded p-3 mb-4 border border-slate-700/50">';
+                statesHtml += '<h5 class="text-[10px] uppercase text-slate-500 font-bold mb-2 tracking-wider">State of Driving Forces</h5>';
+                statesHtml += '<table class="w-full text-xs force-table">';
                 for (const [k, v] of Object.entries(s.force_states)) {
-                    statesHtml += `<tr><td class="force-key">${k}</td><td class="force-val">${v}</td></tr>`;
+                    statesHtml += `<tr><td class="text-slate-400 font-medium">${k}</td><td class="text-right text-cyan-400 font-mono">${v}</td></tr>`;
                 }
+                statesHtml += '</table></div>';
             }
-            statesHtml += '</table>';
 
-            const borderClass = isTop ? "border-indigo-500/50" : "border-slate-700";
-            const bgClass = isTop ? "bg-slate-800" : "bg-slate-900";
-
+            const borderClass = isTop ? "border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.15)]" : "border-slate-700";
             return `
-                <div class="${bgClass} border ${borderClass} rounded-xl p-5 flex flex-col h-full">
-                    <div class="flex justify-between items-start mb-3">
-                        <h4 class="font-bold text-white text-lg leading-tight">${s.title}</h4>
-                        ${isTop && s.id_key ? `<span class="text-[10px] bg-indigo-900 text-indigo-200 px-2 py-1 rounded">${s.id_key.split(':')[0]}</span>` : ''}
+                <div class="bg-slate-900 border ${borderClass} rounded-xl p-6 flex flex-col h-full hover:border-indigo-500/50 transition-colors">
+                    <div class="flex justify-between items-start mb-4">
+                        <h4 class="font-bold text-slate-200 text-lg leading-tight w-3/4">${s.title}</h4>
+                        ${isTop && s.id_key ? `<span class="text-[9px] uppercase font-bold bg-indigo-900/80 text-indigo-200 px-2 py-1 rounded border border-indigo-700">${s.id_key.split(':')[0]}</span>` : ''}
                     </div>
-
-                    <div class="bg-black/20 rounded p-2 mb-4">
-                        ${statesHtml}
-                    </div>
-
-                    <p class="text-slate-300 text-sm mb-4 leading-relaxed flex-grow">${s.description}</p>
-
-                    <div class="mt-auto space-y-3 pt-4 border-t border-slate-700/50">
-                        <div>
-                            <span class="text-xs font-bold text-emerald-400 uppercase tracking-wide">Signposts</span>
-                            <ul class="text-xs text-slate-400 list-disc pl-4 mt-1">
-                                ${(s.signposts || []).map(x => `<li>${x}</li>`).join('')}
-                            </ul>
-                        </div>
-                        <div>
-                            <span class="text-xs font-bold text-rose-400 uppercase tracking-wide">Black Swan</span>
-                            <p class="text-xs text-slate-400 mt-1">🦢 ${s.black_swan || "None"}</p>
-                        </div>
+                    ${statesHtml}
+                    <p class="text-slate-300 text-sm mb-6 leading-relaxed flex-grow border-l-2 border-slate-700 pl-3">${s.description}</p>
+                    <div class="space-y-3 pt-4 border-t border-slate-700/50">
+                        <div><span class="text-[10px] font-bold text-slate-400 uppercase">Signposts</span><ul class="text-xs text-slate-400 list-disc pl-5">${(s.signposts || []).map(x => `<li>${x}</li>`).join('')}</ul></div>
+                        <div><span class="text-[10px] font-bold text-rose-400 uppercase">Black Swan</span><p class="text-xs text-slate-300 pl-5 italic">"${s.black_swan || "None"}"</p></div>
                     </div>
                 </div>
             `;
         }
 
         function render(data) {
-            // Debate Log
             document.getElementById('debate-log').innerHTML = data.moderator_report.debate_log.map(l => `<div>> ${l}</div>`).join('');
+            document.getElementById('top-scenarios').innerHTML = data.moderator_report.final_scenarios.map(s => renderScenarioCard(s, true)).join('');
 
-            // Top Scenarios
-            const topDiv = document.getElementById('top-scenarios');
-            topDiv.innerHTML = data.moderator_report.final_scenarios.map(s => renderScenarioCard(s, true)).join('');
-
-            // Agent Grid
             const grid = document.getElementById('agent-grid');
             grid.innerHTML = "";
             for (const [role, info] of Object.entries(data.agent_data)) {
@@ -161,10 +182,8 @@
                             <h3 class="font-bold text-white">${role}</h3>
                             <span class="text-xs bg-slate-700 px-2 py-1 rounded text-cyan-400">${info.scenarios.length} Scenarios</span>
                         </div>
-                        <p class="text-xs text-slate-500 mb-4">Click to view detailed architectures...</p>
-                        <div class="flex flex-wrap gap-2">
-                            ${info.selected_forces.slice(0,3).map(f => `<span class="text-[10px] bg-slate-900 border border-slate-700 px-2 py-1 rounded text-slate-300">${f}</span>`).join('')}
-                        </div>
+                        <p class="text-xs text-slate-500 mb-4">Click to view architectures...</p>
+                        <div class="flex flex-wrap gap-2">${info.selected_forces.slice(0,3).map(f => `<span class="text-[10px] bg-slate-900 border border-slate-700 px-2 py-1 rounded text-slate-300">${f}</span>`).join('')}</div>
                     </div>
                 `;
             }
@@ -173,19 +192,9 @@
 
         function openModal(role) {
             if (!currentData || !currentData.agent_data[role]) return;
-            const info = currentData.agent_data[role];
-
             document.getElementById('modal-title').innerText = `Scenarios by ${role}`;
-            document.getElementById('modal-content').innerHTML = info.scenarios.map(s => renderScenarioCard(s, false)).join('');
+            document.getElementById('modal-content').innerHTML = currentData.agent_data[role].scenarios.map(s => renderScenarioCard(s, false)).join('');
             document.getElementById('modal').classList.remove('hidden');
-        }
-
-        function closeModal() {
-            document.getElementById('modal').classList.add('hidden');
-        }
-
-        function toggleLog() {
-            document.getElementById('debate-log').classList.toggle('hidden');
         }
     </script>
 </body>
