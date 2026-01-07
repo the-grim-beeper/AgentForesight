@@ -1,16 +1,22 @@
 import os
+import logging
 from flask import Flask, render_template, request, jsonify, Response
 from functools import wraps
-from agents import run_foresight_simulation
+from agents import run_foresight_simulation, ValidationError
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
 # --- PASSWORD PROTECTION CONFIGURATION ---
-# Default username is 'team'.
-# Password comes from environment variable 'APP_PASSWORD' (set this in Render),
-# or defaults to 'default_secret' for local testing.
+# Username is 'team'. Password MUST be set via APP_PASSWORD environment variable.
 USERNAME = "team"
-PASSWORD = os.environ.get("APP_PASSWORD", "default_secret")
+PASSWORD = os.environ.get("APP_PASSWORD")
+
+if not PASSWORD:
+    raise ValueError("APP_PASSWORD environment variable is required. Set it before starting the application.")
 
 
 def check_auth(username, password):
@@ -45,6 +51,9 @@ def index():
     return render_template('index.html')
 
 
+# Request timeout in seconds
+REQUEST_TIMEOUT = 300  # 5 minutes max for simulation
+
 @app.route('/run', methods=['POST'])
 @requires_auth  # <--- Locks the API behind a password
 def run():
@@ -59,10 +68,18 @@ def run():
 
     try:
         # Run the simulation with the user's specific model choices
-        result = run_foresight_simulation(focal_question, model_config)
+        result = run_foresight_simulation(focal_question, model_config, timeout=REQUEST_TIMEOUT)
         return jsonify(result)
+    except ValidationError as e:
+        # Validation errors are safe to return to the client
+        return jsonify({"error": str(e)}), 400
+    except TimeoutError:
+        logger.warning(f"Simulation timed out for question: {focal_question[:100]}")
+        return jsonify({"error": "Simulation timed out. Please try a simpler question or try again later."}), 504
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        # Log full error details server-side, return generic message to client
+        logger.exception(f"Simulation failed for question: {focal_question[:100]}")
+        return jsonify({"error": "An internal error occurred. Please try again later."}), 500
 
 
 if __name__ == '__main__':
