@@ -2,11 +2,33 @@ import os
 import json
 import re
 import random
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+class ValidationError(Exception):
+    """Raised when input validation fails."""
+    pass
+
+
+# Input validation constants
+MAX_QUESTION_LENGTH = 1000
+MIN_QUESTION_LENGTH = 10
+ALLOWED_MODELS = {
+    "deepseek-ai/DeepSeek-V3",
+    "meta-llama/Llama-3.3-70B-Instruct",
+    "moonshotai/Kimi-K2-Thinking",
+    "Qwen/Qwen2.5-72B-Instruct",
+    "mistralai/Mixtral-8x22B-Instruct-v0.1",
+}
 
 api_key = os.environ.get("DEEPINFRA_API_KEY")
 if not api_key:
@@ -43,13 +65,14 @@ def clean_with_llm(raw_text):
         )
         return response.choices[0].message.content
     except Exception as e:
-        print(f"Cleaner failed: {e}")
+        logger.error(f"LLM JSON cleaner failed: {e}")
         return None
 
 
 def extract_json(raw_content):
     """Robust JSON extraction pipeline."""
-    if not raw_content: return None
+    if not raw_content:
+        return None
 
     # 1. Try fast substring extraction
     try:
@@ -57,14 +80,19 @@ def extract_json(raw_content):
         end = raw_content.rfind('}')
         if start != -1 and end != -1:
             return json.loads(raw_content[start: end + 1])
-    except:
-        pass
+    except json.JSONDecodeError as e:
+        logger.debug(f"Fast JSON extraction failed: {e}")
 
     # 2. Try LLM Cleanup
     cleaned_text = clean_with_llm(raw_content)
+    if cleaned_text is None:
+        logger.warning("LLM cleanup returned None")
+        return None
+
     try:
         return json.loads(cleaned_text)
-    except:
+    except json.JSONDecodeError as e:
+        logger.warning(f"JSON parsing failed after LLM cleanup: {e}")
         return None
 
 
@@ -107,7 +135,7 @@ class Agent:
             )
             return extract_json(response.choices[0].message.content)
         except Exception as e:
-            print(f"❌ {self.role} Error: {e}")
+            logger.error(f"Agent {self.role} failed to generate scenarios: {e}")
             return None
 
 
@@ -165,7 +193,7 @@ class Moderator:
         # Run 3 Rounds of Debate
         for round_num in range(1, 4):
             try:
-                print(f"Moderator Round {round_num}...")
+                logger.info(f"Moderator Round {round_num}...")
                 response = client.chat.completions.create(
                     model=self.model_id,
                     messages=conversation,
@@ -175,7 +203,7 @@ class Moderator:
 
                 content = extract_json(response.choices[0].message.content)
                 if not content:
-                    print("Moderator output empty/invalid.")
+                    logger.warning("Moderator output empty/invalid.")
                     break
 
                 current_ids = content.get("selected_ids", [])
@@ -202,14 +230,14 @@ class Moderator:
                     conversation.append({"role": "user", "content": critique_prompt})
 
             except Exception as e:
-                print(f"Debate Loop Error: {e}")
+                logger.error(f"Moderator debate loop error: {e}")
                 break
 
-        # Retrieve full scenario objects for the winners
+        # Retrieve full scenario objects for the winners (copy to avoid mutating originals)
         final_scenarios_full = []
         for s_id in final_selection_ids:
             if s_id in master_scenarios:
-                full_obj = master_scenarios[s_id]
+                full_obj = master_scenarios[s_id].copy()
                 full_obj['id_key'] = s_id
                 final_scenarios_full.append(full_obj)
 
@@ -219,10 +247,49 @@ class Moderator:
         }
 
 
-def run_foresight_simulation(focal_question, model_map=None):
-    if model_map is None: model_map = {}
+def validate_input(focal_question, model_map):
+    """Validate user inputs before processing."""
+    # Validate focal question
+    if not focal_question or not isinstance(focal_question, str):
+        raise ValidationError("Focal question must be a non-empty string.")
 
-    print(f"🚀 Starting: {focal_question}")
+    focal_question = focal_question.strip()
+
+    if len(focal_question) < MIN_QUESTION_LENGTH:
+        raise ValidationError(f"Focal question must be at least {MIN_QUESTION_LENGTH} characters.")
+
+    if len(focal_question) > MAX_QUESTION_LENGTH:
+        raise ValidationError(f"Focal question must not exceed {MAX_QUESTION_LENGTH} characters.")
+
+    # Validate model selections
+    if model_map:
+        for role, model_id in model_map.items():
+            if model_id not in ALLOWED_MODELS:
+                raise ValidationError(f"Invalid model '{model_id}' for role '{role}'. Choose from allowed models.")
+
+    return focal_question
+
+
+def run_foresight_simulation(focal_question, model_map=None, timeout=300):
+    """
+    Run the foresight simulation with the given focal question.
+
+    Args:
+        focal_question: The question to analyze
+        model_map: Optional mapping of roles to model IDs
+        timeout: Maximum time in seconds for the simulation (default: 300)
+
+    Raises:
+        ValidationError: If inputs are invalid
+        TimeoutError: If simulation exceeds timeout
+    """
+    if model_map is None:
+        model_map = {}
+
+    # Validate inputs
+    focal_question = validate_input(focal_question, model_map)
+
+    logger.info(f"Starting simulation: {focal_question[:100]}...")
     agent_results = {}
 
     # Use max_workers=6 for paid tier (Restore to 3 if on free tier)
@@ -233,19 +300,22 @@ def run_foresight_simulation(focal_question, model_map=None):
             m_id = model_map.get(role, DEFAULT_AGENT_MODEL)
             future_to_role[executor.submit(Agent(role, m_id).generate_pestle_and_scenarios, focal_question)] = role
 
-        for future in as_completed(future_to_role):
+        for future in as_completed(future_to_role, timeout=timeout):
             role = future_to_role[future]
             try:
-                res = future.result()
+                res = future.result(timeout=timeout)
                 if res:
                     agent_results[role] = res
-                    print(f"✅ {role} Finished")
+                    logger.info(f"Agent {role} finished successfully")
+            except FuturesTimeoutError:
+                logger.error(f"Agent {role} timed out")
+                raise TimeoutError(f"Simulation timed out while waiting for {role}")
             except Exception as e:
-                print(f"❌ {role} Failed: {e}")
+                logger.error(f"Agent {role} failed: {e}")
 
     # Run Moderator
     mod_model = model_map.get("Moderator", DEFAULT_MODERATOR_MODEL)
-    print("🧠 Moderator debating...")
+    logger.info("Moderator debating scenarios...")
     moderator_report = Moderator(mod_model).debate_and_select(focal_question, agent_results)
 
     return {"agent_data": agent_results, "moderator_report": moderator_report}

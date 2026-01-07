@@ -108,6 +108,14 @@
 
         let currentData = null;
 
+        // Escape HTML to prevent XSS attacks
+        function escapeHtml(text) {
+            if (text === null || text === undefined) return '';
+            const div = document.createElement('div');
+            div.textContent = String(text);
+            return div.innerHTML;
+        }
+
         async function runSimulation() {
             const q = document.getElementById('question').value;
             if(!q) return alert("Enter a question");
@@ -146,44 +154,50 @@
                 statesHtml += '<h5 class="text-[10px] uppercase text-slate-500 font-bold mb-2 tracking-wider">State of Driving Forces</h5>';
                 statesHtml += '<table class="w-full text-xs force-table">';
                 for (const [k, v] of Object.entries(s.force_states)) {
-                    statesHtml += `<tr><td class="text-slate-400 font-medium">${k}</td><td class="text-right text-cyan-400 font-mono">${v}</td></tr>`;
+                    statesHtml += `<tr><td class="text-slate-400 font-medium">${escapeHtml(k)}</td><td class="text-right text-cyan-400 font-mono">${escapeHtml(v)}</td></tr>`;
                 }
                 statesHtml += '</table></div>';
             }
 
             const borderClass = isTop ? "border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.15)]" : "border-slate-700";
+            const roleLabel = isTop && s.id_key ? `<span class="text-[9px] uppercase font-bold bg-indigo-900/80 text-indigo-200 px-2 py-1 rounded border border-indigo-700">${escapeHtml(s.id_key.split(':')[0])}</span>` : '';
+
             return `
                 <div class="bg-slate-900 border ${borderClass} rounded-xl p-6 flex flex-col h-full hover:border-indigo-500/50 transition-colors">
                     <div class="flex justify-between items-start mb-4">
-                        <h4 class="font-bold text-slate-200 text-lg leading-tight w-3/4">${s.title}</h4>
-                        ${isTop && s.id_key ? `<span class="text-[9px] uppercase font-bold bg-indigo-900/80 text-indigo-200 px-2 py-1 rounded border border-indigo-700">${s.id_key.split(':')[0]}</span>` : ''}
+                        <h4 class="font-bold text-slate-200 text-lg leading-tight w-3/4">${escapeHtml(s.title)}</h4>
+                        ${roleLabel}
                     </div>
                     ${statesHtml}
-                    <p class="text-slate-300 text-sm mb-6 leading-relaxed flex-grow border-l-2 border-slate-700 pl-3">${s.description}</p>
+                    <p class="text-slate-300 text-sm mb-6 leading-relaxed flex-grow border-l-2 border-slate-700 pl-3">${escapeHtml(s.description)}</p>
                     <div class="space-y-3 pt-4 border-t border-slate-700/50">
-                        <div><span class="text-[10px] font-bold text-slate-400 uppercase">Signposts</span><ul class="text-xs text-slate-400 list-disc pl-5">${(s.signposts || []).map(x => `<li>${x}</li>`).join('')}</ul></div>
-                        <div><span class="text-[10px] font-bold text-rose-400 uppercase">Black Swan</span><p class="text-xs text-slate-300 pl-5 italic">"${s.black_swan || "None"}"</p></div>
+                        <div><span class="text-[10px] font-bold text-slate-400 uppercase">Signposts</span><ul class="text-xs text-slate-400 list-disc pl-5">${(s.signposts || []).map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul></div>
+                        <div><span class="text-[10px] font-bold text-rose-400 uppercase">Black Swan</span><p class="text-xs text-slate-300 pl-5 italic">"${escapeHtml(s.black_swan || "None")}"</p></div>
                     </div>
                 </div>
             `;
         }
 
         function render(data) {
-            document.getElementById('debate-log').innerHTML = data.moderator_report.debate_log.map(l => `<div>> ${l}</div>`).join('');
+            document.getElementById('debate-log').innerHTML = data.moderator_report.debate_log.map(l => `<div>&gt; ${escapeHtml(l)}</div>`).join('');
             document.getElementById('top-scenarios').innerHTML = data.moderator_report.final_scenarios.map(s => renderScenarioCard(s, true)).join('');
 
             const grid = document.getElementById('agent-grid');
             grid.innerHTML = "";
             for (const [role, info] of Object.entries(data.agent_data)) {
                 if (!info) continue;
+                const escapedRole = escapeHtml(role);
+                const scenarioCount = parseInt(info.scenarios.length, 10) || 0;
+                const forces = (info.selected_forces || []).slice(0,3).map(f => `<span class="text-[10px] bg-slate-900 border border-slate-700 px-2 py-1 rounded text-slate-300">${escapeHtml(f)}</span>`).join('');
+
                 grid.innerHTML += `
-                    <div class="bg-slate-800 p-5 rounded-lg border border-slate-700 hover:border-slate-500 transition-colors cursor-pointer" onclick="openModal('${role}')">
+                    <div class="bg-slate-800 p-5 rounded-lg border border-slate-700 hover:border-slate-500 transition-colors cursor-pointer" onclick="openModal('${escapedRole}')">
                         <div class="flex justify-between items-center mb-2">
-                            <h3 class="font-bold text-white">${role}</h3>
-                            <span class="text-xs bg-slate-700 px-2 py-1 rounded text-cyan-400">${info.scenarios.length} Scenarios</span>
+                            <h3 class="font-bold text-white">${escapedRole}</h3>
+                            <span class="text-xs bg-slate-700 px-2 py-1 rounded text-cyan-400">${scenarioCount} Scenarios</span>
                         </div>
                         <p class="text-xs text-slate-500 mb-4">Click to view architectures...</p>
-                        <div class="flex flex-wrap gap-2">${info.selected_forces.slice(0,3).map(f => `<span class="text-[10px] bg-slate-900 border border-slate-700 px-2 py-1 rounded text-slate-300">${f}</span>`).join('')}</div>
+                        <div class="flex flex-wrap gap-2">${forces}</div>
                     </div>
                 `;
             }
