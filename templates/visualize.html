@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scenario Visualizer - Deep Future Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <style>
+        body { background-color: #0b1121; color: #e2e8f0; font-family: 'Inter', sans-serif; }
+        .tab-btn { transition: all 0.3s ease; }
+        .tab-btn.active { background: linear-gradient(135deg, #06b6d4, #6366f1); }
+        .tab-btn:not(.active):hover { background-color: #1e293b; }
+        .viz-container { min-height: calc(100vh - 200px); }
+        .tooltip { position: absolute; background: #1e293b; border: 1px solid #475569; border-radius: 8px; padding: 12px; pointer-events: none; z-index: 100; max-width: 300px; }
+        .scenario-bubble { cursor: pointer; transition: transform 0.2s; }
+        .scenario-bubble:hover { transform: scale(1.1); }
+        .glow { filter: drop-shadow(0 0 8px currentColor); }
+        #timeline-container { overflow-x: auto; }
+        .timeline-lane { height: 60px; margin: 4px 0; }
+        .signpost-marker { cursor: pointer; }
+        #space-3d { width: 100%; height: 100%; }
+        .info-panel { position: absolute; right: 20px; top: 20px; background: rgba(15, 23, 42, 0.95); border: 1px solid #475569; border-radius: 12px; padding: 20px; max-width: 350px; z-index: 50; }
+        .force-node { cursor: pointer; }
+        .force-link { stroke-opacity: 0.6; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-thumb { background-color: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-track { background-color: #1e293b; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Header -->
+    <header class="bg-slate-900/80 backdrop-blur border-b border-slate-800 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center gap-4">
+                <a href="/" class="text-slate-400 hover:text-white transition flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                    Back
+                </a>
+                <div class="h-6 w-px bg-slate-700"></div>
+                <h1 class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-500">
+                    Scenario Visualizer
+                </h1>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="toggleFullscreen()" class="p-2 text-slate-400 hover:text-white transition rounded-lg hover:bg-slate-800">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Focal Question Banner -->
+    <div class="bg-slate-900/50 border-b border-slate-800 px-4 py-2">
+        <p class="max-w-7xl mx-auto text-sm text-slate-400">
+            <span class="text-slate-500">Analyzing:</span>
+            <span id="focal-question" class="text-cyan-400 font-medium"></span>
+        </p>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="bg-slate-900/30 border-b border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex gap-2">
+            <button onclick="switchTab('map')" id="tab-map" class="tab-btn active px-4 py-2 rounded-lg text-sm font-medium text-white flex items-center gap-2">
+                <span>Scenario Map</span>
+            </button>
+            <button onclick="switchTab('forces')" id="tab-forces" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium text-slate-400 flex items-center gap-2">
+                <span>Force Network</span>
+            </button>
+            <button onclick="switchTab('timeline')" id="tab-timeline" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium text-slate-400 flex items-center gap-2">
+                <span>Timeline</span>
+            </button>
+            <button onclick="switchTab('space')" id="tab-space" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium text-slate-400 flex items-center gap-2">
+                <span>3D Space</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="bg-slate-900/20 border-b border-slate-800 px-4 py-2">
+        <div class="max-w-7xl mx-auto flex items-center gap-4 text-sm">
+            <label class="flex items-center gap-2 text-slate-400">
+                <input type="checkbox" id="highlight-final" checked class="rounded bg-slate-700 border-slate-600 text-indigo-500 focus:ring-indigo-500">
+                <span>Highlight Final 4</span>
+            </label>
+            <div class="h-4 w-px bg-slate-700"></div>
+            <label class="text-slate-500">Filter by Agent:</label>
+            <select id="agent-filter" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-300 text-xs">
+                <option value="all">All Agents</option>
+            </select>
+            <div class="flex-1"></div>
+            <div id="legend" class="flex gap-3 text-xs"></div>
+        </div>
+    </div>
+
+    <!-- Visualization Containers -->
+    <main class="max-w-7xl mx-auto p-4">
+        <!-- Scenario Map -->
+        <div id="viz-map" class="viz-container">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-xl font-bold text-white">Scenario Landscape</h2>
+                    <p class="text-sm text-slate-500">Scenarios positioned by optimism (X) and disruption (Y)</p>
+                </div>
+            </div>
+            <div id="map-container" class="bg-slate-900/50 rounded-xl border border-slate-800 relative" style="height: 600px;">
+                <svg id="scenario-map" width="100%" height="100%"></svg>
+            </div>
+        </div>
+
+        <!-- Force Network -->
+        <div id="viz-forces" class="viz-container hidden">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-xl font-bold text-white">Force Network</h2>
+                    <p class="text-sm text-slate-500">How driving forces connect to scenarios</p>
+                </div>
+            </div>
+            <div id="force-container" class="bg-slate-900/50 rounded-xl border border-slate-800 relative" style="height: 600px;">
+                <svg id="force-network" width="100%" height="100%"></svg>
+            </div>
+        </div>
+
+        <!-- Timeline -->
+        <div id="viz-timeline" class="viz-container hidden">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-xl font-bold text-white">Scenario Timeline</h2>
+                    <p class="text-sm text-slate-500">Signposts and black swan events from now to 2050</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="playTimeline()" id="play-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                        <span>Play</span>
+                    </button>
+                    <button onclick="resetTimeline()" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm">Reset</button>
+                </div>
+            </div>
+            <div id="timeline-container" class="bg-slate-900/50 rounded-xl border border-slate-800 p-4" style="min-height: 500px;">
+                <div id="timeline-content"></div>
+            </div>
+        </div>
+
+        <!-- 3D Space -->
+        <div id="viz-space" class="viz-container hidden">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-xl font-bold text-white">3D Scenario Space</h2>
+                    <p class="text-sm text-slate-500">Navigate with mouse: drag to rotate, scroll to zoom</p>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-slate-500">
+                    <span class="px-2 py-1 bg-slate-800 rounded">X: Force 1</span>
+                    <span class="px-2 py-1 bg-slate-800 rounded">Y: Force 2</span>
+                    <span class="px-2 py-1 bg-slate-800 rounded">Z: Force 3</span>
+                </div>
+            </div>
+            <div id="space-container" class="bg-slate-900/50 rounded-xl border border-slate-800 relative" style="height: 600px;">
+                <canvas id="space-3d"></canvas>
+                <div id="space-info-panel" class="info-panel hidden">
+                    <button onclick="closeInfoPanel()" class="absolute top-2 right-2 text-slate-400 hover:text-white">&times;</button>
+                    <h3 id="panel-title" class="text-lg font-bold text-white mb-2"></h3>
+                    <p id="panel-role" class="text-xs text-cyan-400 mb-3"></p>
+                    <p id="panel-description" class="text-sm text-slate-300 mb-4"></p>
+                    <div id="panel-forces" class="text-xs"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Tooltip -->
+    <div id="tooltip" class="tooltip hidden"></div>
+
+    <script>
+    // ============================================================
+    // GLOBAL STATE & CONFIG
+    // ============================================================
+    let scenarioData = null;
+    let focalQuestion = '';
+    let allScenarios = [];
+    let finalScenarioIds = new Set();
+    let selectedScenario = null;
+    let currentTab = 'map';
+
+    const ROLE_COLORS = {
+        'Economist': '#10b981',
+        'Sociologist': '#f59e0b',
+        'Technologist': '#3b82f6',
+        'Ecologist': '#22c55e',
+        'Political Scientist': '#ef4444',
+        'Legal Ethicist': '#8b5cf6'
+    };
+
+    const OPTIMISTIC_WORDS = ['growth', 'prosperity', 'innovation', 'success', 'progress', 'opportunity', 'flourish', 'thrive', 'harmony', 'peace', 'stable', 'sustainable', 'breakthrough', 'positive', 'improve', 'advance'];
+    const PESSIMISTIC_WORDS = ['collapse', 'crisis', 'decline', 'failure', 'conflict', 'disruption', 'chaos', 'instability', 'threat', 'risk', 'downturn', 'recession', 'war', 'disaster', 'negative', 'deteriorate'];
+    const DISRUPTIVE_WORDS = ['revolution', 'transform', 'radical', 'unprecedented', 'dramatic', 'sudden', 'shock', 'upheaval', 'paradigm', 'breakthrough', 'disrupt', 'overturn', 'replace', 'new era'];
+
+    // ============================================================
+    // INITIALIZATION
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', () => {
+        loadData();
+    });
+
+    function loadData() {
+        const dataStr = localStorage.getItem('foresightData');
+        focalQuestion = localStorage.getItem('foresightQuestion') || 'Unknown Question';
+
+        if (!dataStr) {
+            alert('No scenario data found. Please run a simulation first.');
+            window.location.href = '/';
+            return;
+        }
+
+        scenarioData = JSON.parse(dataStr);
+        document.getElementById('focal-question').textContent = focalQuestion;
+
+        // Process scenarios
+        processScenarios();
+        buildLegend();
+        buildAgentFilter();
+
+        // Initialize all visualizations
+        initScenarioMap();
+        initForceNetwork();
+        initTimeline();
+        initSpace3D();
+
+        // Set up event listeners
+        document.getElementById('highlight-final').addEventListener('change', updateAllVisualizations);
+        document.getElementById('agent-filter').addEventListener('change', updateAllVisualizations);
+    }
+
+    function processScenarios() {
+        allScenarios = [];
+
+        // Collect final scenario IDs
+        if (scenarioData.moderator_report && scenarioData.moderator_report.final_scenarios) {
+            scenarioData.moderator_report.final_scenarios.forEach(s => {
+                if (s.id_key) finalScenarioIds.add(s.id_key);
+            });
+        }
+
+        // Process all agent scenarios
+        for (const [role, data] of Object.entries(scenarioData.agent_data || {})) {
+            if (!data || !data.scenarios) continue;
+
+            data.scenarios.forEach((s, idx) => {
+                const idKey = `${role}: ${s.title}`;
+                allScenarios.push({
+                    ...s,
+                    role: role,
+                    idKey: idKey,
+                    isFinal: finalScenarioIds.has(idKey),
+                    optimism: calculateOptimism(s.description),
+                    disruption: calculateDisruption(s.description, s.black_swan),
+                    selectedForces: data.selected_forces || []
+                });
+            });
+        }
+    }
+
+    function calculateOptimism(text) {
+        if (!text) return 0.5;
+        const lower = text.toLowerCase();
+        let score = 0;
+        OPTIMISTIC_WORDS.forEach(w => { if (lower.includes(w)) score += 1; });
+        PESSIMISTIC_WORDS.forEach(w => { if (lower.includes(w)) score -= 1; });
+        return Math.max(0, Math.min(1, 0.5 + score * 0.1));
+    }
+
+    function calculateDisruption(text, blackSwan) {
+        if (!text) return 0.5;
+        const lower = text.toLowerCase();
+        let score = 0;
+        DISRUPTIVE_WORDS.forEach(w => { if (lower.includes(w)) score += 1; });
+        if (blackSwan && blackSwan.length > 50) score += 1;
+        return Math.max(0, Math.min(1, 0.3 + score * 0.15));
+    }
+
+    function buildLegend() {
+        const legend = document.getElementById('legend');
+        legend.innerHTML = Object.entries(ROLE_COLORS).map(([role, color]) =>
+            `<span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full" style="background:${color}"></span>${role}</span>`
+        ).join('');
+    }
+
+    function buildAgentFilter() {
+        const filter = document.getElementById('agent-filter');
+        Object.keys(ROLE_COLORS).forEach(role => {
+            const opt = document.createElement('option');
+            opt.value = role;
+            opt.textContent = role;
+            filter.appendChild(opt);
+        });
+    }
+
+    function getFilteredScenarios() {
+        const agentFilter = document.getElementById('agent-filter').value;
+        let filtered = allScenarios;
+        if (agentFilter !== 'all') {
+            filtered = filtered.filter(s => s.role === agentFilter);
+        }
+        return filtered;
+    }
+
+    function updateAllVisualizations() {
+        initScenarioMap();
+        initForceNetwork();
+        initTimeline();
+        // 3D space doesn't need filter updates
+    }
+
+    // ============================================================
+    // TAB NAVIGATION
+    // ============================================================
+    function switchTab(tab) {
+        currentTab = tab;
+        ['map', 'forces', 'timeline', 'space'].forEach(t => {
+            document.getElementById(`viz-${t}`).classList.toggle('hidden', t !== tab);
+            document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
+            document.getElementById(`tab-${t}`).classList.toggle('text-white', t === tab);
+            document.getElementById(`tab-${t}`).classList.toggle('text-slate-400', t !== tab);
+        });
+
+        if (tab === 'space') {
+            setTimeout(() => initSpace3D(), 100);
+        }
+    }
+
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen();
+        } else {
+            document.exitFullscreen();
+        }
+    }
+
+    // ============================================================
+    // 1. SCENARIO MAP (D3.js)
+    // ============================================================
+    function initScenarioMap() {
+        const container = document.getElementById('map-container');
+        const svg = d3.select('#scenario-map');
+        svg.selectAll('*').remove();
+
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+        const padding = 60;
+
+        const scenarios = getFilteredScenarios();
+        const highlightFinal = document.getElementById('highlight-final').checked;
+
+        // Scales
+        const xScale = d3.scaleLinear().domain([0, 1]).range([padding, width - padding]);
+        const yScale = d3.scaleLinear().domain([0, 1]).range([height - padding, padding]);
+
+        // Axes
+        const xAxis = svg.append('g')
+            .attr('transform', `translate(0, ${height - padding})`)
+            .call(d3.axisBottom(xScale).ticks(5).tickFormat(d => d < 0.5 ? 'Pessimistic' : d > 0.5 ? 'Optimistic' : ''));
+        xAxis.selectAll('text').attr('fill', '#64748b').attr('font-size', '10px');
+        xAxis.selectAll('line, path').attr('stroke', '#334155');
+
+        const yAxis = svg.append('g')
+            .attr('transform', `translate(${padding}, 0)`)
+            .call(d3.axisLeft(yScale).ticks(5).tickFormat(d => d < 0.5 ? 'Stable' : d > 0.5 ? 'Disruptive' : ''));
+        yAxis.selectAll('text').attr('fill', '#64748b').attr('font-size', '10px');
+        yAxis.selectAll('line, path').attr('stroke', '#334155');
+
+        // Axis labels
+        svg.append('text').attr('x', width/2).attr('y', height - 15).attr('text-anchor', 'middle').attr('fill', '#64748b').attr('font-size', '12px').text('Optimism →');
+        svg.append('text').attr('transform', `rotate(-90)`).attr('x', -height/2).attr('y', 20).attr('text-anchor', 'middle').attr('fill', '#64748b').attr('font-size', '12px').text('← Disruption');
+
+        // Quadrant labels
+        svg.append('text').attr('x', padding + 30).attr('y', padding + 20).attr('fill', '#475569').attr('font-size', '11px').text('Pessimistic & Disruptive');
+        svg.append('text').attr('x', width - padding - 120).attr('y', padding + 20).attr('fill', '#475569').attr('font-size', '11px').text('Optimistic & Disruptive');
+        svg.append('text').attr('x', padding + 30).attr('y', height - padding - 20).attr('fill', '#475569').attr('font-size', '11px').text('Pessimistic & Stable');
+        svg.append('text').attr('x', width - padding - 100).attr('y', height - padding - 20).attr('fill', '#475569').attr('font-size', '11px').text('Optimistic & Stable');
+
+        // Create simulation for collision detection
+        const simulation = d3.forceSimulation(scenarios)
+            .force('x', d3.forceX(d => xScale(d.optimism)).strength(0.8))
+            .force('y', d3.forceY(d => yScale(d.disruption)).strength(0.8))
+            .force('collide', d3.forceCollide(d => d.isFinal && highlightFinal ? 28 : 18))
+            .stop();
+
+        // Run simulation
+        for (let i = 0; i < 120; i++) simulation.tick();
+
+        // Draw scenarios
+        const bubbles = svg.selectAll('.scenario-bubble')
+            .data(scenarios)
+            .enter()
+            .append('g')
+            .attr('class', 'scenario-bubble')
+            .attr('transform', d => `translate(${d.x}, ${d.y})`);
+
+        // Glow filter for final scenarios
+        const defs = svg.append('defs');
+        const filter = defs.append('filter').attr('id', 'glow');
+        filter.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'coloredBlur');
+        const feMerge = filter.append('feMerge');
+        feMerge.append('feMergeNode').attr('in', 'coloredBlur');
+        feMerge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+        bubbles.append('circle')
+            .attr('r', d => d.isFinal && highlightFinal ? 22 : 14)
+            .attr('fill', d => ROLE_COLORS[d.role])
+            .attr('opacity', d => d.isFinal && highlightFinal ? 0.9 : 0.7)
+            .attr('stroke', d => d.isFinal && highlightFinal ? '#fff' : 'none')
+            .attr('stroke-width', 2)
+            .style('filter', d => d.isFinal && highlightFinal ? 'url(#glow)' : 'none');
+
+        // Labels for final scenarios
+        bubbles.filter(d => d.isFinal && highlightFinal)
+            .append('text')
+            .attr('text-anchor', 'middle')
+            .attr('dy', 35)
+            .attr('fill', '#e2e8f0')
+            .attr('font-size', '10px')
+            .text(d => d.title.substring(0, 20) + (d.title.length > 20 ? '...' : ''));
+
+        // Interactions
+        bubbles
+            .on('mouseover', (event, d) => showTooltip(event, d))
+            .on('mouseout', hideTooltip)
+            .on('click', (event, d) => selectScenario(d));
+    }
+
+    // ============================================================
+    // 2. FORCE NETWORK (D3.js)
+    // ============================================================
+    function initForceNetwork() {
+        const container = document.getElementById('force-container');
+        const svg = d3.select('#force-network');
+        svg.selectAll('*').remove();
+
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+
+        const scenarios = getFilteredScenarios();
+        const highlightFinal = document.getElementById('highlight-final').checked;
+
+        // Collect all unique forces
+        const forcesSet = new Set();
+        scenarios.forEach(s => {
+            (s.selectedForces || []).forEach(f => forcesSet.add(f));
+        });
+        const forces = Array.from(forcesSet);
+
+        // Create nodes
+        const nodes = [
+            ...forces.map(f => ({ id: f, type: 'force', label: f })),
+            ...scenarios.map(s => ({ id: s.idKey, type: 'scenario', data: s, label: s.title }))
+        ];
+
+        // Create links
+        const links = [];
+        scenarios.forEach(s => {
+            (s.selectedForces || []).forEach(f => {
+                const state = s.force_states ? s.force_states[f] : '';
+                links.push({ source: f, target: s.idKey, state: state });
+            });
+        });
+
+        // Create simulation
+        const simulation = d3.forceSimulation(nodes)
+            .force('link', d3.forceLink(links).id(d => d.id).distance(120))
+            .force('charge', d3.forceManyBody().strength(-200))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('collide', d3.forceCollide(40));
+
+        // Draw links
+        const link = svg.append('g')
+            .selectAll('line')
+            .data(links)
+            .enter()
+            .append('line')
+            .attr('class', 'force-link')
+            .attr('stroke', '#475569')
+            .attr('stroke-width', 1.5);
+
+        // Draw nodes
+        const node = svg.append('g')
+            .selectAll('.force-node')
+            .data(nodes)
+            .enter()
+            .append('g')
+            .attr('class', 'force-node')
+            .call(d3.drag()
+                .on('start', dragstarted)
+                .on('drag', dragged)
+                .on('end', dragended));
+
+        // Force nodes (larger)
+        node.filter(d => d.type === 'force')
+            .append('rect')
+            .attr('width', 100)
+            .attr('height', 30)
+            .attr('x', -50)
+            .attr('y', -15)
+            .attr('rx', 6)
+            .attr('fill', '#1e293b')
+            .attr('stroke', '#6366f1')
+            .attr('stroke-width', 2);
+
+        node.filter(d => d.type === 'force')
+            .append('text')
+            .attr('text-anchor', 'middle')
+            .attr('dy', 4)
+            .attr('fill', '#e2e8f0')
+            .attr('font-size', '10px')
+            .text(d => d.label.substring(0, 15));
+
+        // Scenario nodes
+        node.filter(d => d.type === 'scenario')
+            .append('circle')
+            .attr('r', d => d.data.isFinal && highlightFinal ? 16 : 10)
+            .attr('fill', d => ROLE_COLORS[d.data.role])
+            .attr('stroke', d => d.data.isFinal && highlightFinal ? '#fff' : 'none')
+            .attr('stroke-width', 2);
+
+        // Interactions
+        node.filter(d => d.type === 'scenario')
+            .on('mouseover', (event, d) => showTooltip(event, d.data))
+            .on('mouseout', hideTooltip)
+            .on('click', (event, d) => selectScenario(d.data));
+
+        // Update positions
+        simulation.on('tick', () => {
+            link
+                .attr('x1', d => d.source.x)
+                .attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x)
+                .attr('y2', d => d.target.y);
+
+            node.attr('transform', d => `translate(${d.x}, ${d.y})`);
+        });
+
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+    }
+
+    // ============================================================
+    // 3. TIMELINE (GSAP)
+    // ============================================================
+    let timelineAnimation = null;
+
+    function initTimeline() {
+        const container = document.getElementById('timeline-content');
+        container.innerHTML = '';
+
+        const scenarios = getFilteredScenarios();
+        const highlightFinal = document.getElementById('highlight-final').checked;
+
+        const currentYear = new Date().getFullYear();
+        const endYear = 2050;
+        const years = endYear - currentYear;
+
+        // Timeline header
+        const header = document.createElement('div');
+        header.className = 'flex items-center mb-4 pl-40';
+        header.innerHTML = `
+            <div class="flex-1 flex justify-between text-xs text-slate-500">
+                ${Array.from({length: 6}, (_, i) => `<span>${currentYear + Math.floor(i * years / 5)}</span>`).join('')}
+            </div>
+        `;
+        container.appendChild(header);
+
+        // Create lanes for each scenario
+        scenarios.forEach((scenario, idx) => {
+            const lane = document.createElement('div');
+            lane.className = 'timeline-lane flex items-center';
+            lane.innerHTML = `
+                <div class="w-40 pr-4 text-right">
+                    <span class="text-xs font-medium" style="color: ${ROLE_COLORS[scenario.role]}">${scenario.title.substring(0, 18)}${scenario.title.length > 18 ? '...' : ''}</span>
+                </div>
+                <div class="flex-1 relative h-full">
+                    <div class="absolute inset-y-0 left-0 right-0 flex items-center">
+                        <div class="h-1 w-full bg-slate-800 rounded"></div>
+                    </div>
+                    <div class="absolute inset-y-0 left-0 right-0 flex items-center timeline-progress" data-idx="${idx}">
+                        <div class="h-1 bg-gradient-to-r from-cyan-500 to-indigo-500 rounded" style="width: 0%"></div>
+                    </div>
+                    <div class="absolute inset-y-0 left-0 right-0 flex items-center justify-between px-2 timeline-markers" data-idx="${idx}">
+                        ${(scenario.signposts || []).slice(0, 4).map((sp, i) => `
+                            <div class="signpost-marker opacity-0" style="position: absolute; left: ${15 + i * 20}%" title="${sp}">
+                                <div class="w-3 h-3 rounded-full bg-cyan-400 border-2 border-slate-900"></div>
+                            </div>
+                        `).join('')}
+                        ${scenario.black_swan ? `
+                            <div class="signpost-marker opacity-0" style="position: absolute; left: 85%" title="Black Swan: ${scenario.black_swan}">
+                                <div class="w-4 h-4 rounded-full bg-rose-500 border-2 border-slate-900 animate-pulse"></div>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+                ${scenario.isFinal && highlightFinal ? '<span class="ml-2 text-xs text-indigo-400">★</span>' : ''}
+            `;
+            container.appendChild(lane);
+        });
+    }
+
+    function playTimeline() {
+        const btn = document.getElementById('play-btn');
+        if (timelineAnimation && timelineAnimation.isActive()) {
+            timelineAnimation.pause();
+            btn.innerHTML = '<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><span>Play</span>';
+            return;
+        }
+
+        btn.innerHTML = '<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg><span>Pause</span>';
+
+        timelineAnimation = gsap.timeline();
+
+        document.querySelectorAll('.timeline-progress').forEach((el, idx) => {
+            timelineAnimation.to(el.querySelector('div'), {
+                width: '100%',
+                duration: 3,
+                ease: 'none'
+            }, 0);
+        });
+
+        document.querySelectorAll('.timeline-markers').forEach(el => {
+            const markers = el.querySelectorAll('.signpost-marker');
+            markers.forEach((marker, i) => {
+                const left = parseFloat(marker.style.left) / 100;
+                timelineAnimation.to(marker, {
+                    opacity: 1,
+                    scale: 1.2,
+                    duration: 0.3,
+                    ease: 'back.out'
+                }, left * 3);
+                timelineAnimation.to(marker, {
+                    scale: 1,
+                    duration: 0.2
+                }, left * 3 + 0.3);
+            });
+        });
+
+        timelineAnimation.eventCallback('onComplete', () => {
+            btn.innerHTML = '<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><span>Play</span>';
+        });
+    }
+
+    function resetTimeline() {
+        if (timelineAnimation) {
+            timelineAnimation.kill();
+        }
+        document.querySelectorAll('.timeline-progress div').forEach(el => {
+            el.style.width = '0%';
+        });
+        document.querySelectorAll('.signpost-marker').forEach(el => {
+            el.style.opacity = '0';
+        });
+        document.getElementById('play-btn').innerHTML = '<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><span>Play</span>';
+    }
+
+    // ============================================================
+    // 4. 3D SPACE (Three.js)
+    // ============================================================
+    let scene, camera, renderer, controls;
+    let spheres = [];
+    let raycaster, mouse;
+    let space3dInitialized = false;
+
+    function initSpace3D() {
+        const container = document.getElementById('space-container');
+        const canvas = document.getElementById('space-3d');
+
+        if (space3dInitialized) {
+            onWindowResize();
+            return;
+        }
+
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+
+        // Scene
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0b1121);
+
+        // Camera
+        camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
+        camera.position.set(80, 60, 80);
+        camera.lookAt(0, 0, 0);
+
+        // Renderer
+        renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+        renderer.setSize(width, height);
+        renderer.setPixelRatio(window.devicePixelRatio);
+
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+        const pointLight = new THREE.PointLight(0xffffff, 0.8);
+        pointLight.position.set(50, 50, 50);
+        scene.add(pointLight);
+
+        // Grid
+        const gridHelper = new THREE.GridHelper(100, 20, 0x334155, 0x1e293b);
+        scene.add(gridHelper);
+
+        // Axes
+        const axesGroup = new THREE.Group();
+        const axisMaterial = new THREE.LineBasicMaterial({ color: 0x6366f1 });
+
+        // X axis
+        const xGeom = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-50, 0, 0), new THREE.Vector3(50, 0, 0)]);
+        axesGroup.add(new THREE.Line(xGeom, axisMaterial));
+
+        // Y axis
+        const yGeom = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, -50, 0), new THREE.Vector3(0, 50, 0)]);
+        axesGroup.add(new THREE.Line(yGeom, axisMaterial));
+
+        // Z axis
+        const zGeom = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, -50), new THREE.Vector3(0, 0, 50)]);
+        axesGroup.add(new THREE.Line(zGeom, axisMaterial));
+
+        scene.add(axesGroup);
+
+        // Stars background
+        const starGeometry = new THREE.BufferGeometry();
+        const starCount = 1000;
+        const positions = new Float32Array(starCount * 3);
+        for (let i = 0; i < starCount * 3; i += 3) {
+            positions[i] = (Math.random() - 0.5) * 400;
+            positions[i + 1] = (Math.random() - 0.5) * 400;
+            positions[i + 2] = (Math.random() - 0.5) * 400;
+        }
+        starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const starMaterial = new THREE.PointsMaterial({ color: 0x888888, size: 0.5 });
+        scene.add(new THREE.Points(starGeometry, starMaterial));
+
+        // Add scenario spheres
+        const highlightFinal = document.getElementById('highlight-final').checked;
+        allScenarios.forEach(scenario => {
+            const radius = scenario.isFinal && highlightFinal ? 4 : 2;
+            const geometry = new THREE.SphereGeometry(radius, 32, 32);
+            const color = new THREE.Color(ROLE_COLORS[scenario.role]);
+            const material = new THREE.MeshPhongMaterial({
+                color: color,
+                emissive: scenario.isFinal ? color : 0x000000,
+                emissiveIntensity: scenario.isFinal ? 0.3 : 0,
+                transparent: true,
+                opacity: 0.9
+            });
+            const sphere = new THREE.Mesh(geometry, material);
+
+            // Position based on force states or derived values
+            const x = (scenario.optimism - 0.5) * 80;
+            const y = (scenario.disruption - 0.5) * 80;
+            const z = (Math.random() - 0.5) * 40;
+            sphere.position.set(x, y, z);
+            sphere.userData = scenario;
+
+            scene.add(sphere);
+            spheres.push(sphere);
+        });
+
+        // Raycaster for click detection
+        raycaster = new THREE.Raycaster();
+        mouse = new THREE.Vector2();
+
+        // Simple orbit controls (manual implementation)
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const deltaX = e.clientX - previousMousePosition.x;
+            const deltaY = e.clientY - previousMousePosition.y;
+
+            const spherical = new THREE.Spherical().setFromVector3(camera.position);
+            spherical.theta -= deltaX * 0.01;
+            spherical.phi -= deltaY * 0.01;
+            spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+            camera.position.setFromSpherical(spherical);
+            camera.lookAt(0, 0, 0);
+
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+
+        canvas.addEventListener('mouseup', () => { isDragging = false; });
+        canvas.addEventListener('mouseleave', () => { isDragging = false; });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoom = e.deltaY > 0 ? 1.1 : 0.9;
+            camera.position.multiplyScalar(zoom);
+            camera.position.clampLength(30, 200);
+        });
+
+        canvas.addEventListener('click', (e) => {
+            if (isDragging) return;
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(spheres);
+
+            if (intersects.length > 0) {
+                const scenario = intersects[0].object.userData;
+                showInfoPanel(scenario);
+            }
+        });
+
+        window.addEventListener('resize', onWindowResize);
+        space3dInitialized = true;
+
+        animate();
+    }
+
+    function onWindowResize() {
+        if (!renderer) return;
+        const container = document.getElementById('space-container');
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(width, height);
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+
+        // Gentle rotation for spheres
+        spheres.forEach(sphere => {
+            if (sphere.userData.isFinal) {
+                sphere.rotation.y += 0.01;
+            }
+        });
+
+        renderer.render(scene, camera);
+    }
+
+    function showInfoPanel(scenario) {
+        const panel = document.getElementById('space-info-panel');
+        document.getElementById('panel-title').textContent = scenario.title;
+        document.getElementById('panel-role').textContent = scenario.role;
+        document.getElementById('panel-description').textContent = scenario.description;
+
+        const forcesHtml = Object.entries(scenario.force_states || {})
+            .map(([k, v]) => `<div class="flex justify-between py-1 border-b border-slate-800"><span class="text-slate-500">${k}</span><span class="text-cyan-400">${v}</span></div>`)
+            .join('');
+        document.getElementById('panel-forces').innerHTML = forcesHtml;
+
+        panel.classList.remove('hidden');
+    }
+
+    function closeInfoPanel() {
+        document.getElementById('space-info-panel').classList.add('hidden');
+    }
+
+    // ============================================================
+    // SHARED FUNCTIONS
+    // ============================================================
+    function showTooltip(event, scenario) {
+        const tooltip = document.getElementById('tooltip');
+        tooltip.innerHTML = `
+            <div class="flex items-center gap-2 mb-2">
+                <span class="w-3 h-3 rounded-full" style="background: ${ROLE_COLORS[scenario.role]}"></span>
+                <span class="text-xs text-slate-400">${scenario.role}</span>
+                ${scenario.isFinal ? '<span class="text-xs text-indigo-400">★ Final</span>' : ''}
+            </div>
+            <h4 class="font-bold text-white mb-2">${scenario.title}</h4>
+            <p class="text-sm text-slate-300 mb-2">${scenario.description.substring(0, 150)}...</p>
+            <div class="text-xs text-slate-500">${(scenario.signposts || []).length} signposts</div>
+        `;
+        tooltip.style.left = `${event.pageX + 15}px`;
+        tooltip.style.top = `${event.pageY + 15}px`;
+        tooltip.classList.remove('hidden');
+    }
+
+    function hideTooltip() {
+        document.getElementById('tooltip').classList.add('hidden');
+    }
+
+    function selectScenario(scenario) {
+        selectedScenario = scenario;
+        console.log('Selected:', scenario);
+        // Could sync selection across views here
+    }
+    </script>
+</body>
+</html>

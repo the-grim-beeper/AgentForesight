@@ -51,6 +51,12 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/visualize')
+@requires_auth  # <--- Locks visualization behind a password
+def visualize():
+    return render_template('visualize.html')
+
+
 # Request timeout in seconds
 REQUEST_TIMEOUT = 300  # 5 minutes max for simulation
 
