@@ -142,11 +142,30 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ question: q, model_config: modelConfig })
                 });
-                const data = await res.json();
+
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    throw new Error(`Server error ${res.status}: ${errorText.substring(0, 200)}`);
+                }
+
+                const text = await res.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (parseError) {
+                    console.error('Invalid JSON response:', text.substring(0, 500));
+                    throw new Error(`Invalid JSON response. First 200 chars: ${text.substring(0, 200)}`);
+                }
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
                 currentData = data;
                 render(data);
             } catch (e) {
-                alert("Error: " + e);
+                console.error('Simulation error:', e);
+                alert("Error: " + e.message);
             } finally {
                 document.getElementById('btn-text').innerText = "Simulate";
                 document.getElementById('loading').classList.add('hidden');
