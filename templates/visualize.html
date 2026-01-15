@@ -196,6 +196,20 @@
     const PESSIMISTIC_WORDS = ['collapse', 'crisis', 'decline', 'failure', 'conflict', 'disruption', 'chaos', 'instability', 'threat', 'risk', 'downturn', 'recession', 'war', 'disaster', 'negative', 'deteriorate'];
     const DISRUPTIVE_WORDS = ['revolution', 'transform', 'radical', 'unprecedented', 'dramatic', 'sudden', 'shock', 'upheaval', 'paradigm', 'breakthrough', 'disrupt', 'overturn', 'replace', 'new era'];
 
+    // Escape HTML to prevent XSS and broken attributes
+    function escapeHtml(text) {
+        if (text === null || text === undefined) return '';
+        const div = document.createElement('div');
+        div.textContent = String(text);
+        return div.innerHTML;
+    }
+
+    // Escape for HTML attributes (handles quotes)
+    function escapeAttr(text) {
+        if (text === null || text === undefined) return '';
+        return String(text).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
     // ============================================================
     // INITIALIZATION
     // ============================================================
@@ -589,7 +603,7 @@
             lane.className = 'timeline-lane flex items-center';
             lane.innerHTML = `
                 <div class="w-40 pr-4 text-right">
-                    <span class="text-xs font-medium" style="color: ${ROLE_COLORS[scenario.role]}">${scenario.title.substring(0, 18)}${scenario.title.length > 18 ? '...' : ''}</span>
+                    <span class="text-xs font-medium" style="color: ${ROLE_COLORS[scenario.role]}">${escapeHtml(scenario.title.substring(0, 18))}${scenario.title.length > 18 ? '...' : ''}</span>
                 </div>
                 <div class="flex-1 relative h-full">
                     <div class="absolute inset-y-0 left-0 right-0 flex items-center">
@@ -600,12 +614,12 @@
                     </div>
                     <div class="absolute inset-y-0 left-0 right-0 flex items-center justify-between px-2 timeline-markers" data-idx="${idx}">
                         ${(scenario.signposts || []).slice(0, 4).map((sp, i) => `
-                            <div class="signpost-marker opacity-0" style="position: absolute; left: ${15 + i * 20}%" title="${sp}">
+                            <div class="signpost-marker opacity-0" style="position: absolute; left: ${15 + i * 20}%" title="${escapeAttr(sp)}">
                                 <div class="w-3 h-3 rounded-full bg-cyan-400 border-2 border-slate-900"></div>
                             </div>
                         `).join('')}
                         ${scenario.black_swan ? `
-                            <div class="signpost-marker opacity-0" style="position: absolute; left: 85%" title="Black Swan: ${scenario.black_swan}">
+                            <div class="signpost-marker opacity-0" style="position: absolute; left: 85%" title="Black Swan: ${escapeAttr(scenario.black_swan)}">
                                 <div class="w-4 h-4 rounded-full bg-rose-500 border-2 border-slate-900 animate-pulse"></div>
                             </div>
                         ` : ''}
@@ -863,7 +877,7 @@
         document.getElementById('panel-description').textContent = scenario.description;
 
         const forcesHtml = Object.entries(scenario.force_states || {})
-            .map(([k, v]) => `<div class="flex justify-between py-1 border-b border-slate-800"><span class="text-slate-500">${k}</span><span class="text-cyan-400">${v}</span></div>`)
+            .map(([k, v]) => `<div class="flex justify-between py-1 border-b border-slate-800"><span class="text-slate-500">${escapeHtml(k)}</span><span class="text-cyan-400">${escapeHtml(v)}</span></div>`)
             .join('');
         document.getElementById('panel-forces').innerHTML = forcesHtml;
 
@@ -882,11 +896,11 @@
         tooltip.innerHTML = `
             <div class="flex items-center gap-2 mb-2">
                 <span class="w-3 h-3 rounded-full" style="background: ${ROLE_COLORS[scenario.role]}"></span>
-                <span class="text-xs text-slate-400">${scenario.role}</span>
+                <span class="text-xs text-slate-400">${escapeHtml(scenario.role)}</span>
                 ${scenario.isFinal ? '<span class="text-xs text-indigo-400">★ Final</span>' : ''}
             </div>
-            <h4 class="font-bold text-white mb-2">${scenario.title}</h4>
-            <p class="text-sm text-slate-300 mb-2">${scenario.description.substring(0, 150)}...</p>
+            <h4 class="font-bold text-white mb-2">${escapeHtml(scenario.title)}</h4>
+            <p class="text-sm text-slate-300 mb-2">${escapeHtml(scenario.description.substring(0, 150))}...</p>
             <div class="text-xs text-slate-500">${(scenario.signposts || []).length} signposts</div>
         `;
         tooltip.style.left = `${event.pageX + 15}px`;
