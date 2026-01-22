@@ -1,10 +1,10 @@
 import os
 import json
-import re
 import random
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 from openai import OpenAI
+import anthropic
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -19,30 +19,215 @@ class ValidationError(Exception):
     pass
 
 
+# =============================================================================
+# PROVIDER CONFIGURATION
+# =============================================================================
+
+# Provider identifiers
+PROVIDER_DEEPINFRA = "deepinfra"
+PROVIDER_OPENAI = "openai"
+PROVIDER_ANTHROPIC = "anthropic"
+
+# Model definitions with their providers
+# Format: model_id -> {provider, display_name, category}
+MODEL_REGISTRY = {
+    # DeepInfra Models
+    "deepseek-ai/DeepSeek-V3": {
+        "provider": PROVIDER_DEEPINFRA,
+        "display_name": "DeepSeek V3 (Fast & Smart)",
+        "category": "DeepInfra"
+    },
+    "meta-llama/Llama-3.3-70B-Instruct": {
+        "provider": PROVIDER_DEEPINFRA,
+        "display_name": "Llama 3.3 70B (Reliable)",
+        "category": "DeepInfra"
+    },
+    "moonshotai/Kimi-K2-Thinking": {
+        "provider": PROVIDER_DEEPINFRA,
+        "display_name": "Kimi K2 Thinking (Deep Logic)",
+        "category": "DeepInfra"
+    },
+    "Qwen/Qwen2.5-72B-Instruct": {
+        "provider": PROVIDER_DEEPINFRA,
+        "display_name": "Qwen 2.5 72B (Versatile)",
+        "category": "DeepInfra"
+    },
+    "mistralai/Mixtral-8x22B-Instruct-v0.1": {
+        "provider": PROVIDER_DEEPINFRA,
+        "display_name": "Mixtral 8x22B (Creative)",
+        "category": "DeepInfra"
+    },
+    # OpenAI Models
+    "gpt-4.1": {
+        "provider": PROVIDER_OPENAI,
+        "display_name": "GPT-4.1 (Smartest Non-Reasoning)",
+        "category": "OpenAI"
+    },
+    "gpt-4.1-mini": {
+        "provider": PROVIDER_OPENAI,
+        "display_name": "GPT-4.1 Mini (Fast & Capable)",
+        "category": "OpenAI"
+    },
+    "gpt-4.1-nano": {
+        "provider": PROVIDER_OPENAI,
+        "display_name": "GPT-4.1 Nano (Ultra Fast)",
+        "category": "OpenAI"
+    },
+    "o3": {
+        "provider": PROVIDER_OPENAI,
+        "display_name": "o3 (Advanced Reasoning)",
+        "category": "OpenAI"
+    },
+    "o4-mini": {
+        "provider": PROVIDER_OPENAI,
+        "display_name": "o4-mini (Fast Reasoning)",
+        "category": "OpenAI"
+    },
+    "gpt-4o": {
+        "provider": PROVIDER_OPENAI,
+        "display_name": "GPT-4o (Multimodal)",
+        "category": "OpenAI"
+    },
+    # Anthropic Models
+    "claude-opus-4-5-20251124": {
+        "provider": PROVIDER_ANTHROPIC,
+        "display_name": "Claude Opus 4.5 (Most Intelligent)",
+        "category": "Anthropic"
+    },
+    "claude-sonnet-4-5-20250929": {
+        "provider": PROVIDER_ANTHROPIC,
+        "display_name": "Claude Sonnet 4.5 (Best Coding)",
+        "category": "Anthropic"
+    },
+    "claude-haiku-4-5-20251201": {
+        "provider": PROVIDER_ANTHROPIC,
+        "display_name": "Claude Haiku 4.5 (Fast & Efficient)",
+        "category": "Anthropic"
+    },
+}
+
+# Build ALLOWED_MODELS set from registry
+ALLOWED_MODELS = set(MODEL_REGISTRY.keys())
+
 # Input validation constants
 MAX_QUESTION_LENGTH = 1000
 MIN_QUESTION_LENGTH = 10
-ALLOWED_MODELS = {
-    "deepseek-ai/DeepSeek-V3",
-    "meta-llama/Llama-3.3-70B-Instruct",
-    "moonshotai/Kimi-K2-Thinking",
-    "Qwen/Qwen2.5-72B-Instruct",
-    "mistralai/Mixtral-8x22B-Instruct-v0.1",
-}
 
-api_key = os.environ.get("DEEPINFRA_API_KEY")
-if not api_key:
+# =============================================================================
+# CLIENT INITIALIZATION
+# =============================================================================
+
+# DeepInfra client (required)
+deepinfra_api_key = os.environ.get("DEEPINFRA_API_KEY")
+if not deepinfra_api_key:
     raise ValueError("DEEPINFRA_API_KEY not found in .env file.")
 
-client = OpenAI(
-    api_key=api_key,
+deepinfra_client = OpenAI(
+    api_key=deepinfra_api_key,
     base_url="https://api.deepinfra.com/v1/openai",
 )
+
+# OpenAI client (optional - only if key provided)
+openai_api_key = os.environ.get("OPENAI_API_KEY")
+openai_client = OpenAI(api_key=openai_api_key) if openai_api_key else None
+
+# Anthropic client (optional - only if key provided)
+anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
+anthropic_client = anthropic.Anthropic(api_key=anthropic_api_key) if anthropic_api_key else None
+
+# Log which providers are available
+logger.info(f"Providers available: DeepInfra=True, OpenAI={openai_client is not None}, Anthropic={anthropic_client is not None}")
 
 # Defaults
 DEFAULT_AGENT_MODEL = "deepseek-ai/DeepSeek-V3"
 DEFAULT_MODERATOR_MODEL = "deepseek-ai/DeepSeek-V3"
 CLEANER_MODEL = "meta-llama/Llama-3.3-70B-Instruct"
+
+
+def get_provider(model_id: str) -> str:
+    """Get the provider for a given model ID."""
+    if model_id not in MODEL_REGISTRY:
+        raise ValidationError(f"Unknown model: {model_id}")
+    return MODEL_REGISTRY[model_id]["provider"]
+
+
+def call_llm(model_id: str, messages: list, temperature: float = 0.7, response_format: dict = None) -> str:
+    """
+    Unified LLM call that routes to the correct provider.
+
+    Args:
+        model_id: The model identifier
+        messages: List of message dicts with 'role' and 'content'
+        temperature: Sampling temperature
+        response_format: Optional format specification (OpenAI-style)
+
+    Returns:
+        The content string from the model response
+
+    Raises:
+        ValidationError: If model or provider is unavailable
+    """
+    provider = get_provider(model_id)
+
+    if provider == PROVIDER_DEEPINFRA:
+        response = deepinfra_client.chat.completions.create(
+            model=model_id,
+            messages=messages,
+            temperature=temperature,
+            response_format=response_format
+        )
+        if not response.choices:
+            raise ValidationError("Empty response from DeepInfra API")
+        return response.choices[0].message.content
+
+    elif provider == PROVIDER_OPENAI:
+        if not openai_client:
+            raise ValidationError("OpenAI API key not configured. Set OPENAI_API_KEY environment variable.")
+        response = openai_client.chat.completions.create(
+            model=model_id,
+            messages=messages,
+            temperature=temperature,
+            response_format=response_format
+        )
+        if not response.choices:
+            raise ValidationError("Empty response from OpenAI API")
+        return response.choices[0].message.content
+
+    elif provider == PROVIDER_ANTHROPIC:
+        if not anthropic_client:
+            raise ValidationError("Anthropic API key not configured. Set ANTHROPIC_API_KEY environment variable.")
+
+        # Convert OpenAI-style messages to Anthropic format
+        system_msg = None
+        anthropic_messages = []
+        for msg in messages:
+            if msg["role"] == "system":
+                system_msg = msg["content"]
+            else:
+                anthropic_messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+
+        # Anthropic API call
+        kwargs = {
+            "model": model_id,
+            "max_tokens": 8192,
+            "messages": anthropic_messages,
+        }
+        if system_msg:
+            kwargs["system"] = system_msg
+        # Note: Anthropic doesn't support temperature=0 with some models
+        if temperature > 0:
+            kwargs["temperature"] = temperature
+
+        response = anthropic_client.messages.create(**kwargs)
+        if not response.content:
+            raise ValidationError("Empty response from Anthropic API")
+        return response.content[0].text
+
+    else:
+        raise ValidationError(f"Unknown provider: {provider}")
 
 ROLES = [
     "Economist", "Sociologist", "Technologist",
@@ -53,17 +238,16 @@ ROLES = [
 def clean_with_llm(raw_text):
     """Fallback: Uses Llama 3.3 to fix broken JSON."""
     try:
-        response = client.chat.completions.create(
-            model=CLEANER_MODEL,
+        return call_llm(
+            model_id=CLEANER_MODEL,
             messages=[
                 {"role": "system",
                  "content": "You are a JSON repair engine. Extract the JSON object. Fix any syntax errors (missing quotes, commas). Output ONLY the JSON string."},
                 {"role": "user", "content": f"Fix this JSON:\n\n{raw_text}"}
             ],
-            response_format={"type": "json_object"},
-            temperature=0.0
+            temperature=0.0,
+            response_format={"type": "json_object"}
         )
-        return response.choices[0].message.content
     except Exception as e:
         logger.error(f"LLM JSON cleaner failed: {e}")
         return None
@@ -128,12 +312,12 @@ class Agent:
         }}
         """
         try:
-            response = client.chat.completions.create(
-                model=self.model_id,
+            content = call_llm(
+                model_id=self.model_id,
                 messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
                 temperature=0.75
             )
-            return extract_json(response.choices[0].message.content)
+            return extract_json(content)
         except Exception as e:
             logger.error(f"Agent {self.role} failed to generate scenarios: {e}")
             return None
@@ -194,14 +378,16 @@ class Moderator:
         for round_num in range(1, 4):
             try:
                 logger.info(f"Moderator Round {round_num}...")
-                response = client.chat.completions.create(
-                    model=self.model_id,
+
+                # Use unified LLM call
+                raw_content = call_llm(
+                    model_id=self.model_id,
                     messages=conversation,
-                    response_format={"type": "json_object"},
-                    temperature=0.7
+                    temperature=0.7,
+                    response_format={"type": "json_object"} if get_provider(self.model_id) != PROVIDER_ANTHROPIC else None
                 )
 
-                content = extract_json(response.choices[0].message.content)
+                content = extract_json(raw_content)
                 if not content:
                     logger.warning("Moderator output empty/invalid.")
                     break
@@ -212,8 +398,8 @@ class Moderator:
                 debate_log.append(f"Round {round_num}: {rationale}")
                 final_selection_ids = current_ids
 
-                # Append assistant response to history
-                conversation.append(response.choices[0].message)
+                # Append assistant response to history (as dict for compatibility)
+                conversation.append({"role": "assistant", "content": raw_content})
 
                 # Inject Critique for the next round
                 if round_num < 3:
