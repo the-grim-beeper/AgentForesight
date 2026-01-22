@@ -81,15 +81,17 @@ MODEL_REGISTRY = {
     "o3": {
         "provider": PROVIDER_OPENAI,
         "display_name": "o3 (Advanced Reasoning)",
-        "category": "OpenAI"
+        "category": "OpenAI",
+        "no_temperature": True  # Reasoning models only support temperature=1
     },
     "o4-mini": {
         "provider": PROVIDER_OPENAI,
         "display_name": "o4-mini (Fast Reasoning)",
-        "category": "OpenAI"
+        "category": "OpenAI",
+        "no_temperature": True  # Reasoning models only support temperature=1
     },
     # Anthropic Models
-    "claude-opus-4-5-20251124": {
+    "claude-opus-4-5-20251101": {
         "provider": PROVIDER_ANTHROPIC,
         "display_name": "Claude Opus 4.5 (Most Intelligent)",
         "category": "Anthropic"
@@ -99,7 +101,7 @@ MODEL_REGISTRY = {
         "display_name": "Claude Sonnet 4.5 (Best Coding)",
         "category": "Anthropic"
     },
-    "claude-haiku-4-5-20251201": {
+    "claude-haiku-4-5-20251001": {
         "provider": PROVIDER_ANTHROPIC,
         "display_name": "Claude Haiku 4.5 (Fast & Efficient)",
         "category": "Anthropic"
@@ -168,14 +170,20 @@ def call_llm(model_id: str, messages: list, temperature: float = 0.7, response_f
         ValidationError: If model or provider is unavailable
     """
     provider = get_provider(model_id)
+    model_info = MODEL_REGISTRY[model_id]
+
+    # Check if model doesn't support custom temperature (reasoning models)
+    supports_temperature = not model_info.get("no_temperature", False)
 
     if provider == PROVIDER_DEEPINFRA:
-        response = deepinfra_client.chat.completions.create(
-            model=model_id,
-            messages=messages,
-            temperature=temperature,
-            response_format=response_format
-        )
+        kwargs = {
+            "model": model_id,
+            "messages": messages,
+            "response_format": response_format
+        }
+        if supports_temperature:
+            kwargs["temperature"] = temperature
+        response = deepinfra_client.chat.completions.create(**kwargs)
         if not response.choices:
             raise ValidationError("Empty response from DeepInfra API")
         return response.choices[0].message.content
@@ -183,12 +191,14 @@ def call_llm(model_id: str, messages: list, temperature: float = 0.7, response_f
     elif provider == PROVIDER_OPENAI:
         if not openai_client:
             raise ValidationError("OpenAI API key not configured. Set OPENAI_API_KEY environment variable.")
-        response = openai_client.chat.completions.create(
-            model=model_id,
-            messages=messages,
-            temperature=temperature,
-            response_format=response_format
-        )
+        kwargs = {
+            "model": model_id,
+            "messages": messages,
+            "response_format": response_format
+        }
+        if supports_temperature:
+            kwargs["temperature"] = temperature
+        response = openai_client.chat.completions.create(**kwargs)
         if not response.choices:
             raise ValidationError("Empty response from OpenAI API")
         return response.choices[0].message.content
