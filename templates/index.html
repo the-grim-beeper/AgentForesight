@@ -84,23 +84,54 @@
         // CONFIGURATION
         const ROLES = ["Moderator", "Economist", "Sociologist", "Technologist", "Ecologist", "Political Scientist", "Legal Ethicist"];
 
-        const MODELS = [
-            {name: "DeepSeek V3 (Fast & Smart)", id: "deepseek-ai/DeepSeek-V3"},
-            {name: "Llama 3.3 70B (Reliable)", id: "meta-llama/Llama-3.3-70B-Instruct"},
-            {name: "Kimi K2 Thinking (Deep Logic)", id: "moonshotai/Kimi-K2-Thinking"},
-            {name: "Qwen 2.5 72B (Versatile)", id: "Qwen/Qwen2.5-72B-Instruct"},
-            {name: "Mixtral 8x22B (Creative)", id: "mistralai/Mixtral-8x22B-Instruct-v0.1"}
+        // Models organized by provider
+        const MODEL_GROUPS = [
+            {
+                name: "DeepInfra",
+                models: [
+                    {name: "DeepSeek V3 (Fast & Smart)", id: "deepseek-ai/DeepSeek-V3"},
+                    {name: "Llama 3.3 70B (Reliable)", id: "meta-llama/Llama-3.3-70B-Instruct"},
+                    {name: "Kimi K2 Thinking (Deep Logic)", id: "moonshotai/Kimi-K2-Thinking"},
+                    {name: "Qwen 2.5 72B (Versatile)", id: "Qwen/Qwen2.5-72B-Instruct"},
+                    {name: "Mixtral 8x22B (Creative)", id: "mistralai/Mixtral-8x22B-Instruct-v0.1"}
+                ]
+            },
+            {
+                name: "OpenAI",
+                models: [
+                    {name: "GPT-5.2 (Flagship)", id: "gpt-5.2"},
+                    {name: "GPT-5.2 Codex (Best Coding)", id: "gpt-5.2-codex"},
+                    {name: "GPT-5 (Reliable)", id: "gpt-5"},
+                    {name: "GPT-5 Mini (Fast)", id: "gpt-5-mini"},
+                    {name: "o3 (Advanced Reasoning)", id: "o3"},
+                    {name: "o4-mini (Fast Reasoning)", id: "o4-mini"}
+                ]
+            },
+            {
+                name: "Anthropic",
+                models: [
+                    {name: "Claude Opus 4.5 (Most Intelligent)", id: "claude-opus-4-5-20251124"},
+                    {name: "Claude Sonnet 4.5 (Best Coding)", id: "claude-sonnet-4-5-20250929"},
+                    {name: "Claude Haiku 4.5 (Fast & Efficient)", id: "claude-haiku-4-5-20251201"}
+                ]
+            }
         ];
+
+        // Flatten for compatibility
+        const MODELS = MODEL_GROUPS.flatMap(g => g.models);
 
         // Initialize Settings
         const settingsDiv = document.getElementById('model-settings');
         ROLES.forEach(role => {
-            const isMod = role === "Moderator";
-            const defaultModel = isMod ? "deepseek-ai/DeepSeek-V3" : "deepseek-ai/DeepSeek-V3"; // Default everything to DeepSeek for speed
+            const defaultModel = "deepseek-ai/DeepSeek-V3"; // Default to DeepSeek for speed
 
-            let options = MODELS.map(m =>
-                `<option value="${m.id}" ${m.id === defaultModel ? 'selected' : ''}>${m.name}</option>`
-            ).join('');
+            // Build optgroups for each provider
+            let options = MODEL_GROUPS.map(group => {
+                const groupOptions = group.models.map(m =>
+                    `<option value="${m.id}" ${m.id === defaultModel ? 'selected' : ''}>${m.name}</option>`
+                ).join('');
+                return `<optgroup label="${group.name}">${groupOptions}</optgroup>`;
+            }).join('');
 
             settingsDiv.innerHTML += `
                 <div>
