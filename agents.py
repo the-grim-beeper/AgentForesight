@@ -58,19 +58,24 @@ MODEL_REGISTRY = {
         "category": "DeepInfra"
     },
     # OpenAI Models
-    "gpt-4.1": {
+    "gpt-5.2": {
         "provider": PROVIDER_OPENAI,
-        "display_name": "GPT-4.1 (Smartest Non-Reasoning)",
+        "display_name": "GPT-5.2 (Flagship)",
         "category": "OpenAI"
     },
-    "gpt-4.1-mini": {
+    "gpt-5.2-codex": {
         "provider": PROVIDER_OPENAI,
-        "display_name": "GPT-4.1 Mini (Fast & Capable)",
+        "display_name": "GPT-5.2 Codex (Best Coding)",
         "category": "OpenAI"
     },
-    "gpt-4.1-nano": {
+    "gpt-5": {
         "provider": PROVIDER_OPENAI,
-        "display_name": "GPT-4.1 Nano (Ultra Fast)",
+        "display_name": "GPT-5 (Reliable)",
+        "category": "OpenAI"
+    },
+    "gpt-5-mini": {
+        "provider": PROVIDER_OPENAI,
+        "display_name": "GPT-5 Mini (Fast)",
         "category": "OpenAI"
     },
     "o3": {
@@ -81,11 +86,6 @@ MODEL_REGISTRY = {
     "o4-mini": {
         "provider": PROVIDER_OPENAI,
         "display_name": "o4-mini (Fast Reasoning)",
-        "category": "OpenAI"
-    },
-    "gpt-4o": {
-        "provider": PROVIDER_OPENAI,
-        "display_name": "GPT-4o (Multimodal)",
         "category": "OpenAI"
     },
     # Anthropic Models
