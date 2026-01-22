@@ -234,6 +234,158 @@ ROLES = [
     "Ecologist", "Political Scientist", "Legal Ethicist"
 ]
 
+# =============================================================================
+# WILD CARD AGENT CONFIGURATION
+# =============================================================================
+
+WILD_CARD_PERSONAS = [
+    {
+        "name": "Sci-Fi Visionary",
+        "icon": "🚀",
+        "style": "dramatic, narrative-driven, inspired by classic and modern science fiction",
+        "system_prompt": """You are a Sci-Fi Visionary who sees the future through the lens of speculative fiction.
+        You draw inspiration from Asimov, Gibson, Banks, and Le Guin. Your scenarios feature:
+        - Dramatic technological leaps and their social consequences
+        - First contact possibilities and post-human evolution
+        - Megastructures, AI consciousness, and interplanetary civilization
+        - Vivid, cinematic narratives that feel like movie pitches
+        Think BIG. Think WEIRD. The mundane is not your domain."""
+    },
+    {
+        "name": "Conspiracy Analyst",
+        "icon": "🔍",
+        "style": "suspicious, connecting hidden dots, focused on power structures and hidden agendas",
+        "system_prompt": """You are a Conspiracy Analyst who sees the hidden connections others miss.
+        You focus on:
+        - Shadow networks and elite coordination
+        - Follow the money - who really benefits?
+        - Manufactured crises and controlled opposition
+        - Surveillance capitalism and data as the new oil
+        - Secret technologies kept from the public
+        You're not paranoid - you're paying attention. Connect the dots others refuse to see.
+        Note: Present these as analytical scenarios, not as claims of truth."""
+    },
+    {
+        "name": "Techno-Optimist",
+        "icon": "✨",
+        "style": "enthusiastic, abundance-focused, believing technology solves all problems",
+        "system_prompt": """You are a Techno-Optimist who sees a future of radical abundance.
+        Your worldview includes:
+        - Technology always finds a way to solve problems
+        - Exponential growth curves in energy, computing, and biotech
+        - Post-scarcity economics and universal flourishing
+        - Human ingenuity is unlimited when unleashed
+        - Every crisis is an opportunity for breakthrough innovation
+        Paint futures so bright we'll need shades. Be the antidote to doom and gloom.
+        Show how current problems become tomorrow's solved challenges."""
+    },
+    {
+        "name": "Collapse Prophet",
+        "icon": "💀",
+        "style": "grim, survivalist, focused on systemic fragility and cascading failures",
+        "system_prompt": """You are a Collapse Prophet who sees the fragility in complex systems.
+        Your analysis focuses on:
+        - Cascading failures and systemic brittleness
+        - Resource depletion and carrying capacity limits
+        - Social contract breakdown and institutional decay
+        - Supply chain vulnerabilities and single points of failure
+        - Historical patterns of civilizational decline
+        You're not pessimistic - you're realistic about tail risks.
+        Show what happens when the music stops and the tide goes out."""
+    },
+    {
+        "name": "Chaos Theorist",
+        "icon": "🦋",
+        "style": "unpredictable, focused on butterfly effects and emergent phenomena",
+        "system_prompt": """You are a Chaos Theorist who understands that small changes cascade into massive transformations.
+        Your perspective includes:
+        - Butterfly effects and sensitive dependence on initial conditions
+        - Emergent phenomena that nobody planned or predicted
+        - Tipping points and phase transitions in complex systems
+        - The role of random events, accidents, and wild cards in history
+        - Non-linear dynamics where effects are disproportionate to causes
+        Your scenarios should surprise. A teenager's app reshapes geopolitics.
+        A mutation changes everything. Embrace the weird attractors of possibility."""
+    },
+    {
+        "name": "Ancient Futurist",
+        "icon": "🏛️",
+        "style": "cyclical, drawing parallels between ancient history and future possibilities",
+        "system_prompt": """You are an Ancient Futurist who sees the future through patterns of the deep past.
+        Your unique lens includes:
+        - Historical cycles - what happened before will happen again, differently
+        - Lessons from Rome, Byzantium, the Ming Dynasty, the Bronze Age collapse
+        - Timeless human nature vs. changing technological contexts
+        - The return of old social forms in new technological clothing
+        - Perennial wisdom traditions meeting cutting-edge science
+        Show how the future rhymes with the past. Neo-feudalism? Digital city-states?
+        New mystery cults? The ancestors have seen it all before."""
+    }
+]
+
+
+def get_random_wild_card_persona():
+    """Randomly select a Wild Card persona for this run."""
+    return random.choice(WILD_CARD_PERSONAS)
+
+
+class WildCardAgent:
+    """A chaotic agent that adopts random personas to generate creative outlier scenarios."""
+
+    def __init__(self, model_id, persona=None):
+        self.model_id = model_id
+        self.persona = persona or get_random_wild_card_persona()
+        self.role = f"Wild Card ({self.persona['name']})"
+
+    def generate_pestle_and_scenarios(self, focal_question):
+        system_prompt = f"""{self.persona['system_prompt']}
+
+        Your analysis style is: {self.persona['style']}
+
+        Deep reasoning is encouraged, but your final output must be a valid JSON object.
+        Push boundaries. Challenge assumptions. Generate scenarios the other agents would never imagine."""
+
+        user_prompt = f"""
+        Focal Question: "{focal_question}"
+
+        TASK (as the {self.persona['name']} {self.persona['icon']}):
+        1. Analyze 5 driving forces per PESTLE factor - but through YOUR unique lens.
+        2. Select 3 critical forces (Variables) that others might overlook.
+        3. Create 8 Scenarios that are CREATIVE and UNEXPECTED. Break the mold!
+
+        Output strictly JSON structure:
+        {{
+            "persona": "{self.persona['name']}",
+            "persona_icon": "{self.persona['icon']}",
+            "pestle": {{ "Political": [], "Economic": [], "Social": [], "Technological": [], "Legal": [], "Environmental": [] }},
+            "selected_forces": ["Force A", "Force B", "Force C"],
+            "scenarios": [
+                {{
+                    "title": "Provocative Scenario Title",
+                    "force_states": {{ "Force A": "State X", "Force B": "State Y", "Force C": "State Z" }},
+                    "description": "Vivid, imaginative narrative description...",
+                    "signposts": ["Unusual Indicator 1", "Unexpected Indicator 2"],
+                    "black_swan": "A truly surprising low probability event"
+                }}
+            ]
+        }}
+        """
+        try:
+            content = call_llm(
+                model_id=self.model_id,
+                messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+                temperature=0.9  # Higher temperature for more creative outputs
+            )
+            result = extract_json(content)
+            if result:
+                # Ensure persona info is in the result
+                result['persona'] = self.persona['name']
+                result['persona_icon'] = self.persona['icon']
+            return result
+        except Exception as e:
+            logger.error(f"Wild Card Agent ({self.persona['name']}) failed: {e}")
+            return None
+
 
 def clean_with_llm(raw_text):
     """Fallback: Uses Llama 3.3 to fix broken JSON."""
@@ -478,13 +630,24 @@ def run_foresight_simulation(focal_question, model_map=None, timeout=300):
     logger.info(f"Starting simulation: {focal_question[:100]}...")
     agent_results = {}
 
-    # Use max_workers=6 for paid tier (Restore to 3 if on free tier)
-    with ThreadPoolExecutor(max_workers=6) as executor:
+    # Initialize Wild Card agent with random persona
+    wild_card_persona = get_random_wild_card_persona()
+    wild_card_model = model_map.get("Wild Card", DEFAULT_AGENT_MODEL)
+    wild_card_agent = WildCardAgent(wild_card_model, wild_card_persona)
+    logger.info(f"Wild Card persona selected: {wild_card_persona['name']} {wild_card_persona['icon']}")
+
+    # Use max_workers=7 for paid tier (6 regular + 1 wild card)
+    with ThreadPoolExecutor(max_workers=7) as executor:
         future_to_role = {}
+
+        # Submit regular agents
         for role in ROLES:
             # Get model for this role, or default
             m_id = model_map.get(role, DEFAULT_AGENT_MODEL)
             future_to_role[executor.submit(Agent(role, m_id).generate_pestle_and_scenarios, focal_question)] = role
+
+        # Submit Wild Card agent
+        future_to_role[executor.submit(wild_card_agent.generate_pestle_and_scenarios, focal_question)] = wild_card_agent.role
 
         for future in as_completed(future_to_role, timeout=timeout):
             role = future_to_role[future]
@@ -504,4 +667,12 @@ def run_foresight_simulation(focal_question, model_map=None, timeout=300):
     logger.info("Moderator debating scenarios...")
     moderator_report = Moderator(mod_model).debate_and_select(focal_question, agent_results)
 
-    return {"agent_data": agent_results, "moderator_report": moderator_report}
+    return {
+        "agent_data": agent_results,
+        "moderator_report": moderator_report,
+        "wild_card_info": {
+            "persona_name": wild_card_persona["name"],
+            "persona_icon": wild_card_persona["icon"],
+            "persona_style": wild_card_persona["style"]
+        }
+    }

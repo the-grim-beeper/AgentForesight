@@ -82,7 +82,7 @@
 
     <script>
         // CONFIGURATION
-        const ROLES = ["Moderator", "Economist", "Sociologist", "Technologist", "Ecologist", "Political Scientist", "Legal Ethicist"];
+        const ROLES = ["Moderator", "Economist", "Sociologist", "Technologist", "Ecologist", "Political Scientist", "Legal Ethicist", "Wild Card"];
 
         // Models organized by provider
         const MODEL_GROUPS = [
@@ -133,12 +133,19 @@
                 return `<optgroup label="${group.name}">${groupOptions}</optgroup>`;
             }).join('');
 
+            // Special styling for Wild Card
+            const isWildCard = role === "Wild Card";
+            const labelClass = isWildCard ? "text-purple-400" : "text-slate-500";
+            const roleLabel = isWildCard ? "🎭 Wild Card (Random Persona)" : role;
+            const borderClass = isWildCard ? "border-purple-700 focus:border-purple-500" : "border-slate-700 focus:border-indigo-500";
+
             settingsDiv.innerHTML += `
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">${role}</label>
-                    <select id="model-${role}" class="w-full bg-slate-800 text-xs text-slate-300 border border-slate-700 rounded px-2 py-2 focus:border-indigo-500 outline-none">
+                    <label class="block text-[10px] font-bold ${labelClass} uppercase mb-1">${roleLabel}</label>
+                    <select id="model-${role}" class="w-full bg-slate-800 text-xs text-slate-300 border ${borderClass} rounded px-2 py-2 outline-none">
                         ${options}
                     </select>
+                    ${isWildCard ? '<p class="text-[9px] text-purple-400/60 mt-1">Persona randomly selected each run</p>' : ''}
                 </div>
             `;
         });
@@ -238,21 +245,47 @@
             document.getElementById('debate-log').innerHTML = data.moderator_report.debate_log.map(l => `<div>&gt; ${escapeHtml(l)}</div>`).join('');
             document.getElementById('top-scenarios').innerHTML = data.moderator_report.final_scenarios.map(s => renderScenarioCard(s, true)).join('');
 
+            // Show Wild Card info banner if present
+            const wildCardInfo = data.wild_card_info;
+            let wildCardBanner = '';
+            if (wildCardInfo) {
+                wildCardBanner = `
+                    <div class="bg-gradient-to-r from-purple-900/50 to-pink-900/50 border border-purple-500/30 rounded-xl p-4 mb-6">
+                        <div class="flex items-center gap-3">
+                            <span class="text-3xl">${wildCardInfo.persona_icon || '🎭'}</span>
+                            <div>
+                                <h3 class="font-bold text-purple-300">Wild Card Persona: ${escapeHtml(wildCardInfo.persona_name)}</h3>
+                                <p class="text-xs text-purple-400/70">${escapeHtml(wildCardInfo.persona_style)}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
             const grid = document.getElementById('agent-grid');
-            grid.innerHTML = "";
+            grid.innerHTML = wildCardBanner;
             for (const [role, info] of Object.entries(data.agent_data)) {
                 if (!info) continue;
                 const escapedRole = escapeHtml(role);
                 const scenarioCount = parseInt(info.scenarios.length, 10) || 0;
                 const forces = (info.selected_forces || []).slice(0,3).map(f => `<span class="text-[10px] bg-slate-900 border border-slate-700 px-2 py-1 rounded text-slate-300">${escapeHtml(f)}</span>`).join('');
 
+                // Check if this is a Wild Card agent
+                const isWildCard = role.startsWith('Wild Card');
+                const cardBorder = isWildCard ? "border-purple-500/50 bg-gradient-to-br from-slate-800 to-purple-900/30" : "border-slate-700 bg-slate-800";
+                const titleColor = isWildCard ? "text-purple-300" : "text-white";
+                const badgeStyle = isWildCard ? "bg-purple-700 text-purple-200" : "bg-slate-700 text-cyan-400";
+
+                // Get persona icon for Wild Card
+                const personaIcon = isWildCard && info.persona_icon ? `<span class="text-xl mr-2">${info.persona_icon}</span>` : '';
+
                 grid.innerHTML += `
-                    <div class="bg-slate-800 p-5 rounded-lg border border-slate-700 hover:border-slate-500 transition-colors cursor-pointer" onclick="openModal('${escapedRole}')">
+                    <div class="${cardBorder} p-5 rounded-lg border hover:border-purple-400/50 transition-colors cursor-pointer" onclick="openModal('${escapedRole}')">
                         <div class="flex justify-between items-center mb-2">
-                            <h3 class="font-bold text-white">${escapedRole}</h3>
-                            <span class="text-xs bg-slate-700 px-2 py-1 rounded text-cyan-400">${scenarioCount} Scenarios</span>
+                            <h3 class="font-bold ${titleColor} flex items-center">${personaIcon}${escapedRole}</h3>
+                            <span class="text-xs ${badgeStyle} px-2 py-1 rounded">${scenarioCount} Scenarios</span>
                         </div>
-                        <p class="text-xs text-slate-500 mb-4">Click to view architectures...</p>
+                        <p class="text-xs text-slate-500 mb-4">${isWildCard ? 'Creative outlier scenarios...' : 'Click to view architectures...'}</p>
                         <div class="flex flex-wrap gap-2">${forces}</div>
                     </div>
                 `;
