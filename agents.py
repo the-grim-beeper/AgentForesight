@@ -32,9 +32,39 @@ PROVIDER_ANTHROPIC = "anthropic"
 # Format: model_id -> {provider, display_name, category}
 MODEL_REGISTRY = {
     # DeepInfra Models
-    "deepseek-ai/DeepSeek-V3": {
+    "deepseek-ai/DeepSeek-V4-Pro": {
         "provider": PROVIDER_DEEPINFRA,
-        "display_name": "DeepSeek V3 (Fast & Smart)",
+        "display_name": "DeepSeek V4 Pro (1.6T MoE, Flagship)",
+        "category": "DeepInfra"
+    },
+    "deepseek-ai/DeepSeek-V4-Flash": {
+        "provider": PROVIDER_DEEPINFRA,
+        "display_name": "DeepSeek V4 Flash (Fast & Smart)",
+        "category": "DeepInfra"
+    },
+    "deepseek-ai/DeepSeek-V3.2": {
+        "provider": PROVIDER_DEEPINFRA,
+        "display_name": "DeepSeek V3.2 (Reliable)",
+        "category": "DeepInfra"
+    },
+    "moonshotai/Kimi-K2.6": {
+        "provider": PROVIDER_DEEPINFRA,
+        "display_name": "Kimi K2.6 (Multimodal Agent)",
+        "category": "DeepInfra"
+    },
+    "Qwen/Qwen3.5-397B-A17B": {
+        "provider": PROVIDER_DEEPINFRA,
+        "display_name": "Qwen 3.5 397B (Versatile Flagship)",
+        "category": "DeepInfra"
+    },
+    "Qwen/Qwen3.6-35B-A3B": {
+        "provider": PROVIDER_DEEPINFRA,
+        "display_name": "Qwen 3.6 35B (Efficient Coding)",
+        "category": "DeepInfra"
+    },
+    "zai-org/GLM-5.1": {
+        "provider": PROVIDER_DEEPINFRA,
+        "display_name": "GLM 5.1 (Agentic Coding)",
         "category": "DeepInfra"
     },
     "meta-llama/Llama-3.3-70B-Instruct": {
@@ -42,64 +72,44 @@ MODEL_REGISTRY = {
         "display_name": "Llama 3.3 70B (Reliable)",
         "category": "DeepInfra"
     },
-    "moonshotai/Kimi-K2-Thinking": {
-        "provider": PROVIDER_DEEPINFRA,
-        "display_name": "Kimi K2 Thinking (Deep Logic)",
-        "category": "DeepInfra"
-    },
-    "Qwen/Qwen2.5-72B-Instruct": {
-        "provider": PROVIDER_DEEPINFRA,
-        "display_name": "Qwen 2.5 72B (Versatile)",
-        "category": "DeepInfra"
-    },
-    "mistralai/Mixtral-8x22B-Instruct-v0.1": {
-        "provider": PROVIDER_DEEPINFRA,
-        "display_name": "Mixtral 8x22B (Creative)",
-        "category": "DeepInfra"
-    },
     # OpenAI Models
-    "gpt-5.2": {
+    "gpt-5.5": {
         "provider": PROVIDER_OPENAI,
-        "display_name": "GPT-5.2 (Flagship)",
+        "display_name": "GPT-5.5 (Flagship)",
         "category": "OpenAI"
     },
-    "gpt-5.2-codex": {
+    "gpt-5.4": {
         "provider": PROVIDER_OPENAI,
-        "display_name": "GPT-5.2 Codex (Best Coding)",
+        "display_name": "GPT-5.4 (Reliable)",
         "category": "OpenAI"
     },
-    "gpt-5": {
+    "gpt-5.4-mini": {
         "provider": PROVIDER_OPENAI,
-        "display_name": "GPT-5 (Reliable)",
+        "display_name": "GPT-5.4 Mini (Fast)",
         "category": "OpenAI"
     },
-    "gpt-5-mini": {
+    "gpt-5.4-nano": {
         "provider": PROVIDER_OPENAI,
-        "display_name": "GPT-5 Mini (Fast)",
-        "category": "OpenAI"
-    },
-    "o3": {
-        "provider": PROVIDER_OPENAI,
-        "display_name": "o3 (Advanced Reasoning)",
-        "category": "OpenAI"
-    },
-    "o4-mini": {
-        "provider": PROVIDER_OPENAI,
-        "display_name": "o4-mini (Fast Reasoning)",
+        "display_name": "GPT-5.4 Nano (Lowest Cost)",
         "category": "OpenAI"
     },
     # Anthropic Models
-    "claude-opus-4-5-20251124": {
+    "claude-opus-4-7": {
         "provider": PROVIDER_ANTHROPIC,
-        "display_name": "Claude Opus 4.5 (Most Intelligent)",
+        "display_name": "Claude Opus 4.7 (Most Intelligent)",
         "category": "Anthropic"
     },
-    "claude-sonnet-4-5-20250929": {
+    "claude-opus-4-6": {
         "provider": PROVIDER_ANTHROPIC,
-        "display_name": "Claude Sonnet 4.5 (Best Coding)",
+        "display_name": "Claude Opus 4.6 (Premium)",
         "category": "Anthropic"
     },
-    "claude-haiku-4-5-20251201": {
+    "claude-sonnet-4-6": {
+        "provider": PROVIDER_ANTHROPIC,
+        "display_name": "Claude Sonnet 4.6 (Balanced)",
+        "category": "Anthropic"
+    },
+    "claude-haiku-4-5": {
         "provider": PROVIDER_ANTHROPIC,
         "display_name": "Claude Haiku 4.5 (Fast & Efficient)",
         "category": "Anthropic"
@@ -139,8 +149,8 @@ anthropic_client = anthropic.Anthropic(api_key=anthropic_api_key) if anthropic_a
 logger.info(f"Providers available: DeepInfra=True, OpenAI={openai_client is not None}, Anthropic={anthropic_client is not None}")
 
 # Defaults
-DEFAULT_AGENT_MODEL = "deepseek-ai/DeepSeek-V3"
-DEFAULT_MODERATOR_MODEL = "deepseek-ai/DeepSeek-V3"
+DEFAULT_AGENT_MODEL = "deepseek-ai/DeepSeek-V4-Flash"
+DEFAULT_MODERATOR_MODEL = "deepseek-ai/DeepSeek-V4-Pro"
 CLEANER_MODEL = "meta-llama/Llama-3.3-70B-Instruct"
 
 

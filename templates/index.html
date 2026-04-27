@@ -89,30 +89,32 @@
             {
                 name: "DeepInfra",
                 models: [
-                    {name: "DeepSeek V3 (Fast & Smart)", id: "deepseek-ai/DeepSeek-V3"},
-                    {name: "Llama 3.3 70B (Reliable)", id: "meta-llama/Llama-3.3-70B-Instruct"},
-                    {name: "Kimi K2 Thinking (Deep Logic)", id: "moonshotai/Kimi-K2-Thinking"},
-                    {name: "Qwen 2.5 72B (Versatile)", id: "Qwen/Qwen2.5-72B-Instruct"},
-                    {name: "Mixtral 8x22B (Creative)", id: "mistralai/Mixtral-8x22B-Instruct-v0.1"}
+                    {name: "DeepSeek V4 Pro (1.6T MoE, Flagship)", id: "deepseek-ai/DeepSeek-V4-Pro"},
+                    {name: "DeepSeek V4 Flash (Fast & Smart)", id: "deepseek-ai/DeepSeek-V4-Flash"},
+                    {name: "DeepSeek V3.2 (Reliable)", id: "deepseek-ai/DeepSeek-V3.2"},
+                    {name: "Kimi K2.6 (Multimodal Agent)", id: "moonshotai/Kimi-K2.6"},
+                    {name: "Qwen 3.5 397B (Versatile Flagship)", id: "Qwen/Qwen3.5-397B-A17B"},
+                    {name: "Qwen 3.6 35B (Efficient Coding)", id: "Qwen/Qwen3.6-35B-A3B"},
+                    {name: "GLM 5.1 (Agentic Coding)", id: "zai-org/GLM-5.1"},
+                    {name: "Llama 3.3 70B (Reliable)", id: "meta-llama/Llama-3.3-70B-Instruct"}
                 ]
             },
             {
                 name: "OpenAI",
                 models: [
-                    {name: "GPT-5.2 (Flagship)", id: "gpt-5.2"},
-                    {name: "GPT-5.2 Codex (Best Coding)", id: "gpt-5.2-codex"},
-                    {name: "GPT-5 (Reliable)", id: "gpt-5"},
-                    {name: "GPT-5 Mini (Fast)", id: "gpt-5-mini"},
-                    {name: "o3 (Advanced Reasoning)", id: "o3"},
-                    {name: "o4-mini (Fast Reasoning)", id: "o4-mini"}
+                    {name: "GPT-5.5 (Flagship)", id: "gpt-5.5"},
+                    {name: "GPT-5.4 (Reliable)", id: "gpt-5.4"},
+                    {name: "GPT-5.4 Mini (Fast)", id: "gpt-5.4-mini"},
+                    {name: "GPT-5.4 Nano (Lowest Cost)", id: "gpt-5.4-nano"}
                 ]
             },
             {
                 name: "Anthropic",
                 models: [
-                    {name: "Claude Opus 4.5 (Most Intelligent)", id: "claude-opus-4-5-20251124"},
-                    {name: "Claude Sonnet 4.5 (Best Coding)", id: "claude-sonnet-4-5-20250929"},
-                    {name: "Claude Haiku 4.5 (Fast & Efficient)", id: "claude-haiku-4-5-20251201"}
+                    {name: "Claude Opus 4.7 (Most Intelligent)", id: "claude-opus-4-7"},
+                    {name: "Claude Opus 4.6 (Premium)", id: "claude-opus-4-6"},
+                    {name: "Claude Sonnet 4.6 (Balanced)", id: "claude-sonnet-4-6"},
+                    {name: "Claude Haiku 4.5 (Fast & Efficient)", id: "claude-haiku-4-5"}
                 ]
             }
         ];
@@ -123,7 +125,7 @@
         // Initialize Settings
         const settingsDiv = document.getElementById('model-settings');
         ROLES.forEach(role => {
-            const defaultModel = "deepseek-ai/DeepSeek-V3"; // Default to DeepSeek for speed
+            const defaultModel = "deepseek-ai/DeepSeek-V4-Flash"; // Default to DeepSeek V4 Flash for speed
 
             // Build optgroups for each provider
             let options = MODEL_GROUPS.map(group => {
